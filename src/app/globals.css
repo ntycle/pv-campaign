@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  --navy:  #1A2B4A;
+  --red:   #E8231A;
+  --light: #F1F5F9;
+}
+
+* { box-sizing: border-box; }
+body { font-family: var(--font-inter), 'Segoe UI', sans-serif; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #F1F5F9; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid #1A2B4A;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
