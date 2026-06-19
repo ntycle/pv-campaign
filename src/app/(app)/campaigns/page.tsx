@@ -1,8 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { subscribeCampaigns, createCampaign, updateCampaign, deleteCampaign } from "@/lib/firestore";
 import { TEAMS, BRAND, WEEKS, CAMPAIGN_STATUS_CONFIG } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
+
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { CampaignStatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
@@ -277,15 +279,22 @@ export default function CampaignsPage() {
                   {/* Left: color bar + name */}
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-3 h-12 rounded-full flex-shrink-0" style={{ background: cp.color }} />
-                    <div className="min-w-0">
+                    <Link href={`/campaigns/${cp.id}`} className="min-w-0 hover:opacity-80 transition-opacity">
                       <div className="font-black text-slate-800 text-base truncate">{cp.name}</div>
                       <div className="text-xs text-slate-400 mt-0.5 truncate">{cp.concept}</div>
-                    </div>
+                    </Link>
                   </div>
 
                   {/* Right: status + action buttons */}
                   <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                     <CampaignStatusBadge status={cp.status} />
+
+                    <Link
+                      href={`/campaigns/${cp.id}`}
+                      className="px-3 py-1.5 ml-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors"
+                    >
+                      📋 Xem Detail
+                    </Link>
 
                     {/* Edit button */}
                     <button

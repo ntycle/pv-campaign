@@ -18,7 +18,19 @@ export interface Team {
   icon: string;
 }
 
-// ── KPI ────────────────────────────────────────────────────
+// ── User & Roles ────────────────────────────────────────────
+export type UserRole = "campaign_lead" | "team_member" | "viewer";
+
+export interface UserProfile {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+  teamId: TeamId | null;   // team được assign
+  role: UserRole;
+}
+
+// ── KPI (legacy — giữ nguyên cho backwards compat) ─────────
 export interface KpiField {
   id: string;
   label: string;
@@ -37,6 +49,40 @@ export interface KpiEntry {
   note?: string;
   updatedBy?: string;
   updatedAt?: string;
+}
+
+// ── Period (week / month / quarter) ────────────────────────
+export interface Period {
+  type: "week" | "month" | "quarter";
+  value: number;  // week: 0-51 | month: 1-12 | quarter: 1-4
+}
+
+// ── Report Entry — UNIFIED structure cho tất cả 6 teams ────
+export interface ReportEntry {
+  id: string;
+  campaignId: string;
+  teamId: TeamId;
+  metricId: string;         // e.g. 'post_count', 'reach', 'traffic'
+  period: Period;
+  target: number;           // Campaign lead assign
+  actual: number;           // Team member cập nhật
+  unit?: string;
+  note?: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+// ── Team Plan — booking slots theo kỳ ──────────────────────
+export interface TeamPlan {
+  id: string;
+  campaignId: string;
+  teamId: TeamId;
+  weeklyTargets: Record<number, number>;  // weekIndex → target count
+  monthlyTarget: number;
+  quarterlyTarget: number;
+  notes: string;
+  submittedBy: string;
+  updatedAt: string;
 }
 
 // ── Campaign ────────────────────────────────────────────────

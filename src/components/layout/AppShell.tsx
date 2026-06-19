@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { TeamSetupModal } from "@/components/layout/TeamSetupModal";
+
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -22,6 +24,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-slate-100">
+      <TeamSetupModal />
       <Sidebar />
       <main className="flex-1 ml-60 min-h-screen flex flex-col">
         {children}

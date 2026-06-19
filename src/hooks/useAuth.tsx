@@ -7,32 +7,62 @@ import {
   signOut as firebaseSignOut,
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
-import type { AppUser } from "@/types";
+import { getUserProfile, upsertUserProfile } from "@/lib/firestore";
+import type { AppUser, UserProfile, TeamId } from "@/types";
 
 interface AuthCtx {
   user: AppUser | null;
+  userProfile: UserProfile | null;
   loading: boolean;
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (data: Partial<UserProfile>) => Promise<void>;
+  /** Returns true nếu user có thể edit workspace của teamId đó */
+  canEdit: (teamId: TeamId) => boolean;
 }
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [user, setUser]               = useState<AppUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [authError, setAuthError]     = useState<string | null>(null);
 
   useEffect(() => {
-    if (!auth) return; // guard: auth is null during SSR
-    const unsub = onAuthStateChanged(auth, fbUser => {
-      setUser(fbUser ? {
-        uid:         fbUser.uid,
-        displayName: fbUser.displayName,
-        email:       fbUser.email,
-        photoURL:    fbUser.photoURL,
-      } : null);
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, async fbUser => {
+      if (fbUser) {
+        const appUser: AppUser = {
+          uid:         fbUser.uid,
+          displayName: fbUser.displayName,
+          email:       fbUser.email,
+          photoURL:    fbUser.photoURL,
+        };
+        setUser(appUser);
+
+        // Load UserProfile from Firestore
+        const profile = await getUserProfile(fbUser.uid);
+        if (profile) {
+          setUserProfile(profile);
+        } else {
+          // First login: create a default profile (teamId = null → triggers TeamSetupModal)
+          const newProfile: UserProfile = {
+            uid:         fbUser.uid,
+            displayName: fbUser.displayName,
+            email:       fbUser.email,
+            photoURL:    fbUser.photoURL,
+            teamId:      null,
+            role:        "team_member",
+          };
+          await upsertUserProfile(newProfile);
+          setUserProfile(newProfile);
+        }
+      } else {
+        setUser(null);
+        setUserProfile(null);
+      }
       setLoading(false);
     });
     return unsub;
@@ -47,7 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const msg  = (err as { message?: string }).message ?? "Unknown error";
       console.error("[Auth] signInWithPopup error:", code, msg);
 
-      // Map common Firebase error codes to friendly messages
       if (code === "auth/popup-closed-by-user") {
         setAuthError("Bạn đã đóng popup đăng nhập. Vui lòng thử lại.");
       } else if (code === "auth/popup-blocked") {
@@ -57,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           `Domain "${window.location.hostname}" chưa được thêm vào Authorized Domains trên Firebase Console.`
         );
       } else if (code === "auth/cancelled-popup-request") {
-        // Ignore — another popup was already pending
+        // Ignore
       } else {
         setAuthError(`Lỗi đăng nhập (${code}): ${msg}`);
       }
@@ -68,8 +97,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await firebaseSignOut(auth);
   };
 
+  const updateProfile = async (data: Partial<UserProfile>) => {
+    if (!user || !userProfile) return;
+    const updated = { ...userProfile, ...data };
+    await upsertUserProfile(updated);
+    setUserProfile(updated);
+  };
+
+  const canEdit = (teamId: TeamId): boolean => {
+    if (!userProfile) return false;
+    if (userProfile.role === "campaign_lead") return true;   // Campaign lead có thể edit tất cả
+    if (userProfile.role === "viewer") return false;
+    return userProfile.teamId === teamId;                    // team_member chỉ edit team mình
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, authError, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{
+      user, userProfile, loading, authError,
+      signInWithGoogle, signOut, updateProfile, canEdit,
+    }}>
       {children}
     </AuthContext.Provider>
   );

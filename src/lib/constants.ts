@@ -1,7 +1,12 @@
 import type { Team, TeamId, KpiField, ResourceType } from "@/types";
 
-export const WEEKS = ["Tuần 1", "Tuần 2", "Tuần 3", "Tuần 4"];
+export const WEEKS   = ["Tuần 1", "Tuần 2", "Tuần 3", "Tuần 4"];
+export const MONTHS  = ["Tháng 1","Tháng 2","Tháng 3","Tháng 4","Tháng 5","Tháng 6",
+                        "Tháng 7","Tháng 8","Tháng 9","Tháng 10","Tháng 11","Tháng 12"];
+export const QUARTERS = ["Q1 (T1–T3)", "Q2 (T4–T6)", "Q3 (T7–T9)", "Q4 (T10–T12)"];
+export const PERIOD_LABELS = { week: "Theo tuần", month: "Theo tháng", quarter: "Theo quý" } as const;
 export const DAYS_SHORT = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+
 export const DAYS_FULL = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN"];
 
 export const TEAMS: Team[] = [
