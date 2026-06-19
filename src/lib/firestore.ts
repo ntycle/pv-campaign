@@ -129,15 +129,15 @@ export function subscribeKpis(
 }
 
 export async function upsertKpi(entry: Omit<KpiEntry, "id"> & { id?: string }): Promise<void> {
-  if (entry.id) {
-    const { id, ...rest } = entry;
+  const { id, ...rest } = entry;
+  if (id) {
     await updateDoc(doc(db, COLLECTIONS.kpis, id), {
       ...rest,
       updatedAt: serverTimestamp(),
     });
   } else {
     await addDoc(collection(db, COLLECTIONS.kpis), {
-      ...entry,
+      ...rest,
       updatedAt: serverTimestamp(),
     });
   }
