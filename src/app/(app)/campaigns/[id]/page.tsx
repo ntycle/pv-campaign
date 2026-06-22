@@ -8,6 +8,7 @@ import {
 } from "@/lib/firestore";
 import { TEAMS, TEAM_MAP, BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
+import { format } from "date-fns";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { CampaignStatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
@@ -45,7 +46,7 @@ function TabOverview({ campaign, teamPlans }: { campaign: Campaign; teamPlans: T
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Trạng thái",     value: <CampaignStatusBadge status={campaign.status} /> },
-          { label: "Timeline",       value: `Tuần ${campaign.startWeek+1} → ${campaign.endWeek+1}` },
+          { label: "Timeline",       value: `${campaign.startDate ? format(new Date(campaign.startDate), "dd/MM/yyyy") : "—"} → ${campaign.endDate ? format(new Date(campaign.endDate), "dd/MM/yyyy") : "—"}` },
           { label: "Budget",         value: formatCurrency(campaign.budget) },
           { label: "Target GMV",     value: formatCurrency(campaign.targetGmv) },
         ].map(c => (

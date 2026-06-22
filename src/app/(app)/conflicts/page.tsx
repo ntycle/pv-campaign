@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { WeekHeader } from "@/components/layout/WeekHeader";
 import { RESOURCE_CONFIG, TEAMS, CONTENT_QUOTAS, DAYS_FULL, BRAND } from "@/lib/constants";
 import { subscribeContent, subscribeBookings, subscribeCampaigns } from "@/lib/firestore";
+import { isCampaignActiveInWeek } from "@/lib/utils";
 import type { ContentItem, Booking, Campaign } from "@/types";
 
 interface Conflict {
@@ -18,7 +19,7 @@ const SEV_CONFIG = {
   low:    { bg: "#EFF6FF", border: "#3B82F6", icon: "🔵", label: "Thông tin"     },
 };
 
-function detectConflicts(content: ContentItem[], bookings: Booking[], campaigns: Campaign[], week: number): Conflict[] {
+function detectConflicts(content: ContentItem[], bookings: Booking[], campaigns: Campaign[], month: number, week: number): Conflict[] {
   const conflicts: Conflict[] = [];
 
   // 1. Resource overload
@@ -50,7 +51,7 @@ function detectConflicts(content: ContentItem[], bookings: Booking[], campaigns:
   });
 
   // 3. Campaign overlap
-  const activeCamps = campaigns.filter(c => c.startWeek <= week && c.endWeek >= week);
+  const activeCamps = campaigns.filter(c => isCampaignActiveInWeek(c.startDate, c.endDate, month, week));
   if (activeCamps.length > 2) {
     conflicts.push({
       sev: "medium",
@@ -78,21 +79,22 @@ function detectConflicts(content: ContentItem[], bookings: Booking[], campaigns:
 
 export default function ConflictsPage() {
   const [week, setWeek] = useState(0);
+  const [month, setMonth] = useState(new Date().getMonth());
   const [content, setContent] = useState<ContentItem[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
-  useEffect(() => subscribeContent(week, setContent), [week]);
+  useEffect(() => subscribeContent(month, week, setContent), [month, week]);
   useEffect(() => subscribeBookings(week, setBookings), [week]);
 
-  const conflicts = detectConflicts(content, bookings, campaigns, week);
+  const conflicts = detectConflicts(content, bookings, campaigns, month, week);
   const highCount   = conflicts.filter(c => c.sev === "high").length;
   const medCount    = conflicts.filter(c => c.sev === "medium").length;
 
   return (
     <div className="flex flex-col min-h-screen">
-      <WeekHeader activeWeek={week} onChange={setWeek} title="Conflict Check" />
+      <WeekHeader activeWeek={week} onChange={setWeek} title="Conflict Check" activeMonth={month} onMonthChange={setMonth} />
 
       <div className="flex-1 p-6">
         {/* Summary */}

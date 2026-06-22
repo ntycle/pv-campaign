@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { subscribeCampaigns, createCampaign, updateCampaign, deleteCampaign } from "@/lib/firestore";
-import { TEAMS, BRAND, WEEKS, CAMPAIGN_STATUS_CONFIG } from "@/lib/constants";
+import { TEAMS, BRAND, CAMPAIGN_STATUS_CONFIG } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
+import { format } from "date-fns";
 
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { CampaignStatusBadge } from "@/components/ui/StatusBadge";
@@ -15,15 +16,22 @@ const COLORS = ["#EF4444","#8B5CF6","#10B981","#3B82F6","#F59E0B","#EC4899","#06
 // ── Form type ────────────────────────────────────────────────
 type FormState = {
   name: string; color: string; status: CampaignStatus;
-  startWeek: number; endWeek: number; teams: TeamId[];
+  startDate: string; endDate: string; teams: TeamId[];
   concept: string; budget: number; targetGmv: number;
 };
 
-const defaultForm = (): FormState => ({
-  name: "", color: COLORS[0], status: "planning",
-  startWeek: 0, endWeek: 0, teams: [],
-  concept: "", budget: 0, targetGmv: 0,
-});
+const defaultForm = (): FormState => {
+  const today = new Date();
+  const nextMonth = new Date(today);
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  return {
+    name: "", color: COLORS[0], status: "planning",
+    startDate: format(today, "yyyy-MM-dd"), 
+    endDate: format(nextMonth, "yyyy-MM-dd"), 
+    teams: [],
+    concept: "", budget: 0, targetGmv: 0,
+  };
+};
 
 // ── Campaign Modal (Create + Edit) ───────────────────────────
 function CampaignModal({
@@ -83,21 +91,17 @@ function CampaignModal({
             </div>
           )}
 
-          {/* Weeks */}
+          {/* Timeline */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Tuần bắt đầu</label>
-              <select className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none"
-                value={form.startWeek} onChange={e => setForm(p => ({...p, startWeek: +e.target.value}))}>
-                {WEEKS.map((w, i) => <option key={i} value={i}>{w}</option>)}
-              </select>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Ngày bắt đầu</label>
+              <input type="date" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                value={form.startDate} onChange={e => setForm(p => ({...p, startDate: e.target.value}))} />
             </div>
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Tuần kết thúc</label>
-              <select className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none"
-                value={form.endWeek} onChange={e => setForm(p => ({...p, endWeek: +e.target.value}))}>
-                {WEEKS.map((w, i) => <option key={i} value={i}>{w}</option>)}
-              </select>
+              <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Ngày kết thúc</label>
+              <input type="date" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none"
+                value={form.endDate} onChange={e => setForm(p => ({...p, endDate: e.target.value}))} />
             </div>
           </div>
 
@@ -322,7 +326,7 @@ export default function CampaignsPage() {
 
                 {/* Meta info */}
                 <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-500">
-                  <span>📅 Tuần {cp.startWeek + 1} → {cp.endWeek + 1}</span>
+                  <span>📅 {cp.startDate ? format(new Date(cp.startDate), "dd/MM/yyyy") : "—"} → {cp.endDate ? format(new Date(cp.endDate), "dd/MM/yyyy") : "—"}</span>
                   <span>💰 {formatCurrency(cp.budget)}</span>
                   <span>🎯 GMV {formatCurrency(cp.targetGmv)}</span>
                   <span>👤 {cp.createdBy}</span>
@@ -355,8 +359,8 @@ export default function CampaignsPage() {
             name:       modal.campaign.name,
             color:      modal.campaign.color,
             status:     modal.campaign.status,
-            startWeek:  modal.campaign.startWeek,
-            endWeek:    modal.campaign.endWeek,
+            startDate:  modal.campaign.startDate || format(new Date(), "yyyy-MM-dd"),
+            endDate:    modal.campaign.endDate || format(new Date(), "yyyy-MM-dd"),
             teams:      modal.campaign.teams,
             concept:    modal.campaign.concept ?? "",
             budget:     modal.campaign.budget ?? 0,

@@ -93,8 +93,8 @@ export interface Campaign {
   name: string;
   color: string;
   status: CampaignStatus;
-  startWeek: number; // 0-3
-  endWeek: number;   // 0-3
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
   teams: TeamId[];
   concept: string;
   budget: number;
@@ -115,6 +115,7 @@ export interface ContentItem {
   title: string;
   day: number; // 0=Mon … 6=Sun
   weekIndex: number;
+  monthIndex?: number;
   status: ContentStatus;
   note?: string;
   updatedBy?: string;

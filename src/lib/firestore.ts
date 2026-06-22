@@ -54,11 +54,13 @@ export async function deleteCampaign(id: string): Promise<void> {
 
 // ── CONTENT ITEMS ──────────────────────────────────────────
 export function subscribeContent(
+  monthIndex: number,
   weekIndex: number,
   cb: (data: ContentItem[]) => void
 ): Unsubscribe {
   const q = query(
     collection(db, COLLECTIONS.content),
+    where("monthIndex", "==", monthIndex),
     where("weekIndex", "==", weekIndex)
   );
   return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<ContentItem>(d))));

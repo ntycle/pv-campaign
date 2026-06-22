@@ -1,5 +1,5 @@
 "use client";
-import { WEEKS, BRAND } from "@/lib/constants";
+import { WEEKS, MONTHS, BRAND } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -8,9 +8,11 @@ interface Props {
   title?: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  activeMonth?: number;
+  onMonthChange?: (m: number) => void;
 }
 
-export function WeekHeader({ activeWeek, onChange, title, subtitle, actions }: Props) {
+export function WeekHeader({ activeWeek, onChange, title, subtitle, actions, activeMonth, onMonthChange }: Props) {
   return (
     <div
       className="flex items-center justify-between px-6 py-3 border-b border-white/10"
@@ -23,6 +25,19 @@ export function WeekHeader({ activeWeek, onChange, title, subtitle, actions }: P
 
       <div className="flex items-center gap-2">
         {actions}
+        
+        {onMonthChange && activeMonth !== undefined && (
+          <select
+            className="ml-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/20 hover:bg-white/20 outline-none cursor-pointer transition-all"
+            value={activeMonth}
+            onChange={(e) => onMonthChange(Number(e.target.value))}
+          >
+            {MONTHS.map((m, i) => (
+              <option key={i} value={i} className="text-slate-800 bg-white">{m}</option>
+            ))}
+          </select>
+        )}
+
         <div className="flex gap-1.5 ml-4">
           {WEEKS.map((w, i) => (
             <button

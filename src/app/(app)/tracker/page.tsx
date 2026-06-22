@@ -11,13 +11,14 @@ import type { ContentItem, ContentStatus, Campaign } from "@/types";
 
 export default function TrackerPage() {
   const [week, setWeek] = useState(0);
+  const [month, setMonth] = useState(new Date().getMonth());
   const [content, setContent] = useState<ContentItem[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState<ContentStatus>("pending");
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
-  useEffect(() => subscribeContent(week, setContent), [week]);
+  useEffect(() => subscribeContent(month, week, setContent), [month, week]);
 
   const campMap = Object.fromEntries(campaigns.map(c => [c.id, c]));
 
@@ -28,7 +29,7 @@ export default function TrackerPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <WeekHeader activeWeek={week} onChange={setWeek} title="Content Tracker" />
+      <WeekHeader activeWeek={week} onChange={setWeek} title="Content Tracker" activeMonth={month} onMonthChange={setMonth} />
 
       <div className="flex-1 p-6 space-y-6">
         {Object.entries(CONTENT_QUOTAS).map(([type, cfg]) => {

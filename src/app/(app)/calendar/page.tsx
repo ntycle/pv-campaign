@@ -1,23 +1,24 @@
 "use client";
 import { useState, useEffect } from "react";
 import { WeekHeader } from "@/components/layout/WeekHeader";
-import { DAYS_SHORT, DAYS_FULL, TEAMS, CONTENT_QUOTAS, BRAND } from "@/lib/constants";
+import { CONTENT_QUOTAS, TEAMS, BRAND, DAYS_FULL, DAYS_SHORT } from "@/lib/constants";
 import { subscribeContent, subscribeCampaigns, createContent, updateContent } from "@/lib/firestore";
+import { isCampaignActiveInWeek } from "@/lib/utils";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import type { ContentItem, ContentType, ContentStatus, TeamId, Campaign } from "@/types";
 
 function ContentModal({
-  item, campaigns, weekIndex, user,
+  item, campaigns, weekIndex, monthIndex, user,
   onSave, onClose,
 }: {
-  item?: ContentItem; campaigns: Campaign[]; weekIndex: number; user: string;
+  item?: ContentItem; campaigns: Campaign[]; weekIndex: number; monthIndex: number; user: string;
   onSave: (d: Omit<ContentItem,"id">) => void; onClose: () => void;
 }) {
   const [form, setForm] = useState<Omit<ContentItem,"id">>({
     campaignId: "", teamId: "social", type: "post", title: "",
-    day: 0, weekIndex, status: "pending", note: "",
+    day: 0, weekIndex, monthIndex, status: "pending", note: "",
     updatedBy: user,
     ...(item ? { ...item } : {}),
   });
@@ -90,6 +91,7 @@ function ContentModal({
 export default function CalendarPage() {
   const { user } = useAuth();
   const [week, setWeek] = useState(0);
+  const [month, setMonth] = useState(new Date().getMonth());
   const [content, setContent] = useState<ContentItem[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [filterType, setFilterType] = useState("all");
@@ -97,9 +99,11 @@ export default function CalendarPage() {
   const [modal, setModal] = useState<ContentItem | true | null>(null);
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
-  useEffect(() => subscribeContent(week, setContent), [week]);
+  useEffect(() => subscribeContent(month, week, setContent), [month, week]);
 
-  const activeCamps = campaigns.filter(c => c.startWeek <= week && c.endWeek >= week);
+  const activeCamps = campaigns.filter(c => 
+    isCampaignActiveInWeek(c.startDate, c.endDate, month, week)
+  );
   const filtered = content.filter(c =>
     (filterType === "all" || c.type === filterType) &&
     (filterTeam === "all" || c.teamId === filterTeam)
@@ -115,7 +119,13 @@ export default function CalendarPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <WeekHeader activeWeek={week} onChange={setWeek} title="Lịch Tuần" />
+      <WeekHeader 
+        activeWeek={week} 
+        onChange={setWeek} 
+        title="Lịch Tuần" 
+        activeMonth={month}
+        onMonthChange={setMonth}
+      />
 
       {/* Filter bar */}
       <div className="px-6 py-3 bg-white border-b border-slate-100 flex flex-col gap-2">
@@ -202,6 +212,7 @@ export default function CalendarPage() {
           item={modal === true ? undefined : modal}
           campaigns={campaigns}
           weekIndex={week}
+          monthIndex={month}
           user={user?.displayName ?? "User"}
           onSave={handleSave}
           onClose={() => setModal(null)}
