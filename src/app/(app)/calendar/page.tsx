@@ -1,24 +1,25 @@
 "use client";
 import { useState, useEffect } from "react";
-import { WeekHeader } from "@/components/layout/WeekHeader";
-import { CONTENT_QUOTAS, TEAMS, BRAND, DAYS_FULL, DAYS_SHORT } from "@/lib/constants";
-import { subscribeContent, subscribeCampaigns, createContent, updateContent } from "@/lib/firestore";
-import { isCampaignActiveInWeek } from "@/lib/utils";
+import { startOfWeek, endOfWeek, eachDayOfInterval, format, addWeeks, addDays } from "date-fns";
+import { vi } from "date-fns/locale";
+import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
+import { CONTENT_QUOTAS, TEAMS, BRAND, DAYS_FULL } from "@/lib/constants";
+import { subscribeAllContentItems, subscribeCampaigns, upsertContentItem, deleteContentItem } from "@/lib/firestore";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import type { ContentItem, ContentType, ContentStatus, TeamId, Campaign } from "@/types";
 
 function ContentModal({
-  item, campaigns, weekIndex, monthIndex, user,
+  item, campaigns, selectedDate, user,
   onSave, onClose,
 }: {
-  item?: ContentItem; campaigns: Campaign[]; weekIndex: number; monthIndex: number; user: string;
+  item?: ContentItem; campaigns: Campaign[]; selectedDate: string; user: string;
   onSave: (d: Omit<ContentItem,"id">) => void; onClose: () => void;
 }) {
   const [form, setForm] = useState<Omit<ContentItem,"id">>({
     campaignId: "", teamId: "social", type: "post", title: "",
-    day: 0, weekIndex, monthIndex, status: "pending", note: "",
+    date: selectedDate, status: "pending", note: "",
     updatedBy: user,
     ...(item ? { ...item } : {}),
   });
@@ -46,9 +47,7 @@ function ContentModal({
             </div>
             <div>
               <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Ngày</label>
-              <select className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none" value={form.day} onChange={e => setForm(p => ({...p, day: +e.target.value}))}>
-                {DAYS_FULL.map((d,i) => <option key={i} value={i}>{d}</option>)}
-              </select>
+              <input type="date" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none" value={form.date} onChange={e => setForm(p => ({...p, date: e.target.value}))} />
             </div>
             <div>
               <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Trạng thái</label>
@@ -75,6 +74,14 @@ function ContentModal({
         </div>
         <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2 sticky bottom-0 bg-white">
           <button onClick={onClose} className="px-3 py-1.5 text-sm font-bold text-slate-500">Hủy</button>
+          {item && (
+            <button
+              onClick={() => { deleteContentItem(item.id); onClose(); }}
+              className="px-4 py-1.5 text-sm font-black text-red-500 border border-red-200 bg-red-50 hover:bg-red-100 rounded-lg mr-auto"
+            >
+              Xóa
+            </button>
+          )}
           <button
             onClick={() => { if(form.title.trim()) { onSave({...form, updatedBy: user}); onClose(); } }}
             className="px-4 py-1.5 text-sm font-black text-white rounded-lg"
@@ -90,41 +97,48 @@ function ContentModal({
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const [week, setWeek] = useState(0);
-  const [month, setMonth] = useState(new Date().getMonth());
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [content, setContent] = useState<ContentItem[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [filterType, setFilterType] = useState("all");
   const [filterTeam, setFilterTeam] = useState("all");
-  const [modal, setModal] = useState<ContentItem | true | null>(null);
+  const [modal, setModal] = useState<ContentItem | string | null>(null);
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
-  useEffect(() => subscribeContent(month, week, setContent), [month, week]);
+  useEffect(() => subscribeAllContentItems(setContent), []);
 
-  const activeCamps = campaigns.filter(c => 
-    isCampaignActiveInWeek(c.startDate, c.endDate, month, week)
-  );
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekEnd = addDays(addWeeks(weekStart, 4), -1);
+  const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+
+  const activeCamps = campaigns.filter(c => {
+    if (!c.startDate || !c.endDate) return false;
+    const s = new Date(c.startDate);
+    const e = new Date(c.endDate);
+    return s <= weekEnd && e >= weekStart;
+  });
+
   const filtered = content.filter(c =>
     (filterType === "all" || c.type === filterType) &&
-    (filterTeam === "all" || c.teamId === filterTeam)
+    (filterTeam === "all" || c.teamId === filterTeam) &&
+    (c.date >= format(weekStart, "yyyy-MM-dd") && c.date <= format(weekEnd, "yyyy-MM-dd"))
   );
 
   const handleSave = async (data: Omit<ContentItem,"id">) => {
-    if (modal === true) {
-      await createContent(data);
+    if (typeof modal === "string") {
+      await upsertContentItem(data);
     } else if (modal && typeof modal === "object") {
-      await updateContent((modal as ContentItem).id, data);
+      await upsertContentItem({ ...data, id: modal.id });
     }
   };
 
   return (
     <div className="flex flex-col min-h-screen">
-      <WeekHeader 
-        activeWeek={week} 
-        onChange={setWeek} 
-        title="Lịch Tuần" 
-        activeMonth={month}
-        onMonthChange={setMonth}
+      <DateWeekHeader 
+        currentDate={currentDate}
+        onChange={setCurrentDate}
+        title="Lịch Sản Xuất (4 Tuần)" 
+        viewType="4weeks"
       />
 
       {/* Filter bar */}
@@ -152,45 +166,64 @@ export default function CalendarPage() {
       {/* Calendar grid */}
       <div className="flex-1 p-6">
         <div className="grid grid-cols-7 gap-3">
-          {DAYS_SHORT.map((d, di) => {
-            const dayItems = filtered.filter(c => c.day === di);
+          {weekDays.map((day, di) => {
+            const dateStr = format(day, "yyyy-MM-dd");
+            const dayItems = filtered.filter(c => c.date === dateStr);
+            const isToday = format(new Date(), "yyyy-MM-dd") === dateStr;
+
             return (
-              <div key={di} className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden min-h-64">
-                <div className="px-3 py-2 flex items-center justify-between" style={{ background: BRAND.navy }}>
-                  <span className="text-white text-xs font-black">{DAYS_FULL[di]}</span>
-                  <span className="text-xs bg-white/20 text-white px-1.5 py-0.5 rounded-full">{dayItems.length}</span>
+              <div key={di} className="bg-white rounded-lg border border-slate-100 shadow-sm overflow-hidden min-h-[140px] flex flex-col">
+                <div className="px-2 py-1.5 flex items-center justify-between" style={{ background: isToday ? BRAND.red : BRAND.navy }}>
+                  <div className="flex flex-row items-baseline gap-1">
+                    <span className="text-white text-xs font-black">{format(day, "dd/MM")}</span>
+                    <span className="text-white/70 text-[9px] font-bold uppercase">{format(day, "EE", { locale: vi })}</span>
+                  </div>
+                  <span className="text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded-full">{dayItems.length}</span>
                 </div>
                 {/* Active campaigns */}
                 <div className="px-2 pt-1.5 flex flex-col gap-1">
-                  {activeCamps.map(cp => (
-                    <div key={cp.id} className="text-xs font-bold px-2 py-0.5 rounded border-l-2 truncate"
+                  {activeCamps.filter(c => c.startDate <= dateStr && c.endDate >= dateStr).map(cp => (
+                    <div key={cp.id} className="text-[10px] font-bold px-2 py-0.5 rounded border-l-2 truncate"
                       style={{ borderColor: cp.color, background: cp.color + "18", color: cp.color }}>
                       {cp.name}
                     </div>
                   ))}
                 </div>
                 {/* Content items */}
-                <div className="p-2 flex flex-col gap-1.5">
+                <div className="p-2 flex flex-col gap-1.5 flex-1 relative">
                   {dayItems.length === 0 ? (
-                    <div className="text-center text-slate-300 text-xs py-4">Trống</div>
+                    <div className="text-center text-slate-300 text-[10px] py-2">Trống</div>
                   ) : dayItems.map(item => {
                     const ct = CONTENT_QUOTAS[item.type];
+                    const team = TEAMS.find(t => t.id === item.teamId);
                     return (
                       <div
                         key={item.id}
-                        className="bg-slate-50 rounded-lg p-2 cursor-pointer hover:bg-slate-100 transition-colors border-l-2"
+                        className="bg-slate-50 rounded p-1.5 cursor-pointer hover:bg-slate-100 transition-colors border-l-2 flex flex-col gap-1"
                         style={{ borderColor: ct?.color ?? "#ccc" }}
                         onClick={() => setModal(item)}
                       >
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-xs">{ct?.icon}</span>
-                          <StatusBadge status={item.status} />
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px]">{ct?.icon}</span>
+                            <span className="text-[9px] font-bold truncate max-w-[80px]" style={{ color: team?.color }}>{team?.label}</span>
+                          </div>
+                          <div className="scale-75 origin-top-right">
+                            <StatusBadge status={item.status} />
+                          </div>
                         </div>
-                        <div className="text-xs font-bold text-slate-700 leading-tight mb-1 line-clamp-2">{item.title}</div>
-                        <TeamBadge teamId={item.teamId} />
+                        <div className="text-[10px] font-bold text-slate-700 leading-tight line-clamp-2">{item.title}</div>
                       </div>
                     );
                   })}
+                  
+                  {/* Add button inline */}
+                  <div 
+                    onClick={() => setModal(dateStr)}
+                    className="mt-auto pt-1 opacity-0 hover:opacity-100 transition-opacity text-center cursor-pointer text-[10px] font-bold text-slate-400 hover:text-blue-500"
+                  >
+                    + Thêm
+                  </div>
                 </div>
               </div>
             );
@@ -200,7 +233,7 @@ export default function CalendarPage() {
 
       {/* FAB */}
       <button
-        onClick={() => setModal(true)}
+        onClick={() => setModal(format(new Date(), "yyyy-MM-dd"))}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full text-white text-2xl shadow-xl flex items-center justify-center font-black z-40 hover:scale-105 transition-transform"
         style={{ background: BRAND.navy }}
       >
@@ -209,10 +242,9 @@ export default function CalendarPage() {
 
       {modal && (
         <ContentModal
-          item={modal === true ? undefined : modal}
+          item={typeof modal === "object" ? modal : undefined}
+          selectedDate={typeof modal === "string" ? modal : (modal as ContentItem).date}
           campaigns={campaigns}
-          weekIndex={week}
-          monthIndex={month}
           user={user?.displayName ?? "User"}
           onSave={handleSave}
           onClose={() => setModal(null)}

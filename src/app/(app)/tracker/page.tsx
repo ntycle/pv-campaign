@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { WeekHeader } from "@/components/layout/WeekHeader";
 import { CONTENT_QUOTAS, TEAMS, STATUS_CONFIG, BRAND } from "@/lib/constants";
-import { subscribeContent, subscribeCampaigns, updateContent, deleteContent } from "@/lib/firestore";
+import { subscribeContentLegacy as subscribeContent, subscribeCampaigns, updateContentLegacy as updateContent, deleteContentLegacy as deleteContent } from "@/lib/firestore";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { DAYS_SHORT } from "@/lib/constants";

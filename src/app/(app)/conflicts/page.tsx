@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { WeekHeader } from "@/components/layout/WeekHeader";
 import { RESOURCE_CONFIG, TEAMS, CONTENT_QUOTAS, DAYS_FULL, BRAND } from "@/lib/constants";
-import { subscribeContent, subscribeBookings, subscribeCampaigns } from "@/lib/firestore";
+import { subscribeContentLegacy as subscribeContent, subscribeBookingsLegacy as subscribeBookings, subscribeCampaigns } from "@/lib/firestore";
 import { isCampaignActiveInWeek } from "@/lib/utils";
 import type { ContentItem, Booking, Campaign } from "@/types";
 

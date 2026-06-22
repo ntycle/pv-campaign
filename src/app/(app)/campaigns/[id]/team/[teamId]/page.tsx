@@ -1,106 +1,130 @@
 "use client";
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
+import { format } from "date-fns";
 import {
-  subscribeCampaigns, subscribeReports, subscribeTeamPlans,
-  upsertReport, upsertTeamPlan,
+  subscribeCampaigns, subscribeReports, upsertReport,
+  subscribeContentItems, upsertContentItem, deleteContentItem,
+  subscribeBookings, upsertBooking, deleteBooking
 } from "@/lib/firestore";
-import { TEAM_MAP, BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS } from "@/lib/constants";
-import { formatCurrency } from "@/lib/utils";
+import { TEAM_MAP, BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS, RESOURCE_CONFIG } from "@/lib/constants";
 import { useAuth } from "@/hooks/useAuth";
-import type { Campaign, ReportEntry, TeamPlan, TeamId, Period } from "@/types";
+import type { Campaign, ReportEntry, TeamId, Period, ContentItem, Booking, ContentType, ResourceType, Priority } from "@/types";
 
-type PeriodType = "week" | "month" | "quarter";
+type PeriodType = "week" | "month" | "quarter" | "campaign";
 
-// ── Booking Slots Panel ────────────────────────────────────
-function BookingPanel({
-  teamId, campaignId, teamPlan, canEdit, userName,
+// ── Production Panel ───────────────────────────────────────
+function ProductionPanel({
+  teamId, campaign, contents, canEdit, userName,
 }: {
-  teamId: TeamId; campaignId: string;
-  teamPlan: TeamPlan | null; canEdit: boolean; userName: string;
+  teamId: TeamId; campaign: Campaign; contents: ContentItem[]; canEdit: boolean; userName: string;
 }) {
-  const [weekly, setWeekly] = useState<Record<number, number>>(teamPlan?.weeklyTargets ?? {});
-  const [monthly, setMonthly] = useState(teamPlan?.monthlyTarget ?? 0);
-  const [quarterly, setQuarterly] = useState(teamPlan?.quarterlyTarget ?? 0);
-  const [notes, setNotes] = useState(teamPlan?.notes ?? "");
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
+  const [type, setType] = useState<ContentType>("post");
   const [saving, setSaving] = useState(false);
 
-  const handleSave = async () => {
+  const handleAdd = async () => {
+    if (!title) return;
     setSaving(true);
-    await upsertTeamPlan({
-      id:              teamPlan?.id,
-      campaignId,
-      teamId,
-      weeklyTargets:   weekly,
-      monthlyTarget:   monthly,
-      quarterlyTarget: quarterly,
-      notes,
-      submittedBy:     userName,
-      updatedAt:       new Date().toISOString(),
+    await upsertContentItem({
+      campaignId: campaign.id, teamId, title, date, type, status: "pending",
+      updatedBy: userName
     });
+    setTitle("");
     setSaving(false);
   };
 
   return (
     <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm">
-      <h3 className="text-xs font-black text-slate-500 uppercase tracking-wide mb-4">📅 Booking Slots</h3>
-      <div className="space-y-4">
-        {/* Weekly */}
-        <div>
-          <label className="text-xs font-bold text-slate-500 block mb-2">Theo tuần</label>
-          <div className="grid grid-cols-4 gap-2">
-            {WEEKS.map((w, i) => (
-              <div key={i}>
-                <div className="text-[10px] text-slate-400 mb-1">{w}</div>
-                <input
-                  type="number" min={0}
-                  disabled={!canEdit}
-                  className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                  value={weekly[i] ?? 0}
-                  onChange={e => setWeekly(p => ({ ...p, [i]: +e.target.value }))}
-                />
-              </div>
-            ))}
+      <h3 className="text-xs font-black text-slate-500 uppercase tracking-wide mb-4">📅 Lên lịch sản xuất</h3>
+      {canEdit && (
+        <div className="flex flex-col gap-2 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <input type="text" placeholder="Tên nội dung..." className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={title} onChange={e => setTitle(e.target.value)} />
+          <div className="flex gap-2">
+            <input type="date" min={campaign.startDate} max={campaign.endDate} className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={date} onChange={e => setDate(e.target.value)} />
+            <select className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={type} onChange={e => setType(e.target.value as ContentType)}>
+              <option value="post">Bài viết</option>
+              <option value="video">Video</option>
+              <option value="sku">SKU</option>
+              <option value="article">Article</option>
+            </select>
+            <button onClick={handleAdd} disabled={saving || !title} className="px-4 py-2 text-white rounded text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: BRAND.navy }}>Thêm</button>
           </div>
         </div>
-        {/* Monthly + Quarterly */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-bold text-slate-500 block mb-1">Theo tháng</label>
-            <input type="number" min={0} disabled={!canEdit}
-              className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none disabled:bg-slate-50"
-              value={monthly} onChange={e => setMonthly(+e.target.value)} />
+      )}
+      <div className="space-y-2">
+        {contents.sort((a,b) => a.date.localeCompare(b.date)).map(c => (
+          <div key={c.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg text-sm">
+            <div>
+              <div className="font-bold text-slate-700">{c.title} <span className="text-xs font-medium text-slate-400 ml-1">({c.type})</span></div>
+              <div className="text-[10px] font-black text-slate-500 mt-0.5">{format(new Date(c.date), "dd/MM/yyyy")}</div>
+            </div>
+            {canEdit && <button onClick={() => deleteContentItem(c.id)} className="text-red-500 text-xs font-bold hover:underline">Xóa</button>}
           </div>
-          <div>
-            <label className="text-xs font-bold text-slate-500 block mb-1">Theo quý</label>
-            <input type="number" min={0} disabled={!canEdit}
-              className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none disabled:bg-slate-50"
-              value={quarterly} onChange={e => setQuarterly(+e.target.value)} />
+        ))}
+        {contents.length === 0 && <div className="text-xs text-slate-400 text-center py-4">Chưa có lịch sản xuất.</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── Resource Booking Panel ─────────────────────────────────
+function ResourceBookingPanel({
+  teamId, campaign, bookings, canEdit, userName,
+}: {
+  teamId: TeamId; campaign: Campaign; bookings: Booking[]; canEdit: boolean; userName: string;
+}) {
+  const [resource, setResource] = useState<ResourceType>("design_slot");
+  const [dates, setDates] = useState<string>(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
+  const [desc, setDesc] = useState("");
+  const [priority, setPriority] = useState<Priority>("medium");
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = async () => {
+    if (!dates) return;
+    const dateArray = dates.split(",").map(d => d.trim()).filter(Boolean);
+    setSaving(true);
+    await upsertBooking({
+      campaignId: campaign.id, teams: [teamId], resourceType: resource, dates: dateArray,
+      priority, status: "pending", description: desc, updatedBy: userName
+    });
+    setDates(""); setDesc("");
+    setSaving(false);
+  };
+
+  return (
+    <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm mt-6">
+      <h3 className="text-xs font-black text-slate-500 uppercase tracking-wide mb-4">🛠️ Booking Tài Nguyên</h3>
+      {canEdit && (
+        <div className="flex flex-col gap-2 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <select className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={resource} onChange={e => setResource(e.target.value as ResourceType)}>
+            {Object.entries(RESOURCE_CONFIG).map(([k,v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+          </select>
+          <input type="text" placeholder="Các ngày cần (VD: 2026-06-25, 2026-06-26)" className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={dates} onChange={e => setDates(e.target.value)} />
+          <input type="text" placeholder="Ghi chú thêm..." className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
+          <div className="flex gap-2">
+            <select className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={priority} onChange={e => setPriority(e.target.value as Priority)}>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            <button onClick={handleAdd} disabled={saving || !dates} className="px-4 py-2 text-white rounded text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: BRAND.navy }}>Book</button>
           </div>
         </div>
-        {/* Notes */}
-        <div>
-          <label className="text-xs font-bold text-slate-500 block mb-1">Ghi chú</label>
-          <textarea disabled={!canEdit} rows={2}
-            className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none resize-none disabled:bg-slate-50"
-            value={notes} onChange={e => setNotes(e.target.value)}
-            placeholder="Ghi chú kế hoạch booking..." />
-        </div>
-        {canEdit && (
-          <button onClick={handleSave} disabled={saving}
-            className="w-full py-2 text-xs font-black text-white rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{ background: BRAND.navy }}>
-            {saving ? "Đang lưu..." : "💾 Lưu kế hoạch booking"}
-          </button>
-        )}
-        
-        {teamPlan?.updatedAt && (
-          <div className="text-[10px] text-slate-500 text-center bg-slate-50 py-2 rounded-lg border border-slate-100 mt-2">
-            Cập nhật lần cuối lúc <span className="font-bold text-slate-700">{new Date(teamPlan.updatedAt).toLocaleString("vi-VN")}</span>
-            <br />
-            bởi <span className="font-bold text-slate-700">{teamPlan.submittedBy}</span>
+      )}
+      <div className="space-y-2">
+        {bookings.map(b => (
+          <div key={b.id} className="flex flex-col p-3 bg-slate-50 border border-slate-100 rounded-lg text-sm">
+            <div className="flex justify-between items-start mb-1">
+              <span className="font-bold text-slate-700">{RESOURCE_CONFIG[b.resourceType]?.icon} {RESOURCE_CONFIG[b.resourceType]?.label}</span>
+              {canEdit && <button onClick={() => deleteBooking(b.id)} className="text-red-500 text-xs font-bold hover:underline">Xóa</button>}
+            </div>
+            <div className="text-[10px] font-black text-slate-500 mb-1">{b.dates.join(", ")}</div>
+            {b.description && <div className="text-xs italic text-slate-600">{b.description}</div>}
           </div>
-        )}
+        ))}
+        {bookings.length === 0 && <div className="text-xs text-slate-400 text-center py-4">Chưa có booking nào.</div>}
       </div>
     </div>
   );
@@ -192,6 +216,7 @@ function KpiPanel({
   const [saving, setSaving] = useState<string | null>(null);
 
   const periodOptions =
+    periodType === "campaign" ? [{ label: "Tổng Campaign", value: 0 }] :
     periodType === "week"  ? WEEKS.map((w,i) => ({ label: w, value: i })) :
     periodType === "month" ? MONTHS.map((m,i) => ({ label: m, value: i+1 })) :
     QUARTERS.map((q,i) => ({ label: q, value: i+1 }));
@@ -230,16 +255,16 @@ function KpiPanel({
         <h3 className="text-xs font-black text-slate-500 uppercase tracking-wide">📊 Cập nhật KPI Actual</h3>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg overflow-hidden border border-slate-200">
-            {(["week","month","quarter"] as PeriodType[]).map(pt => (
+            {(["week","month","quarter", "campaign"] as PeriodType[]).map(pt => (
               <button key={pt}
-                onClick={() => { setPeriodType(pt); setPeriodValue(pt === "week" ? 0 : 1); }}
+                onClick={() => { setPeriodType(pt); setPeriodValue(pt === "week" || pt === "campaign" ? 0 : 1); }}
                 className="px-2.5 py-1 text-[10px] font-bold transition-colors"
                 style={periodType === pt
                   ? { background: BRAND.navy, color: "#fff" }
                   : { background: "#F9FAFB", color: "#374151" }
                 }
               >
-                {pt === "week" ? "Tuần" : pt === "month" ? "Tháng" : "Quý"}
+                {PERIOD_LABELS[pt]}
               </button>
             ))}
           </div>
@@ -283,7 +308,8 @@ export default function TeamWorkspacePage({
 
   const [campaign, setCampaign]   = useState<Campaign | null>(null);
   const [reports, setReports]     = useState<ReportEntry[]>([]);
-  const [teamPlans, setTeamPlans] = useState<TeamPlan[]>([]);
+  const [contents, setContents]   = useState<ContentItem[]>([]);
+  const [bookings, setBookings]   = useState<Booking[]>([]);
   const [loading, setLoading]     = useState(true);
 
   useEffect(() => {
@@ -294,10 +320,10 @@ export default function TeamWorkspacePage({
   }, [id]);
 
   useEffect(() => subscribeReports(id, setReports), [id]);
-  useEffect(() => subscribeTeamPlans(id, setTeamPlans), [id]);
+  useEffect(() => subscribeContentItems(id, tid, setContents), [id, tid]);
+  useEffect(() => subscribeBookings(id, tid, setBookings), [id, tid]);
 
   const myReports   = reports.filter(r => r.teamId === tid);
-  const myTeamPlan  = teamPlans.find(p => p.teamId === tid) ?? null;
   const editAllowed = canEdit(tid);
   const userName    = user?.displayName ?? "user";
 
@@ -342,14 +368,23 @@ export default function TeamWorkspacePage({
 
       {/* Content */}
       <div className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Booking Slots */}
-        <BookingPanel
-          teamId={tid}
-          campaignId={id}
-          teamPlan={myTeamPlan}
-          canEdit={editAllowed}
-          userName={userName}
-        />
+        {/* Production & Booking (Left Column) */}
+        <div className="flex flex-col">
+          <ProductionPanel
+            teamId={tid}
+            campaign={campaign}
+            contents={contents}
+            canEdit={editAllowed}
+            userName={userName}
+          />
+          <ResourceBookingPanel
+            teamId={tid}
+            campaign={campaign}
+            bookings={bookings}
+            canEdit={editAllowed}
+            userName={userName}
+          />
+        </div>
 
         {/* KPI Actuals */}
         <KpiPanel

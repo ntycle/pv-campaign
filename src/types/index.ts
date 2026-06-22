@@ -113,9 +113,7 @@ export interface ContentItem {
   teamId: TeamId;
   type: ContentType;
   title: string;
-  day: number; // 0=Mon … 6=Sun
-  weekIndex: number;
-  monthIndex?: number;
+  date: string; // YYYY-MM-DD
   status: ContentStatus;
   note?: string;
   updatedBy?: string;
@@ -131,8 +129,7 @@ export interface Booking {
   campaignId: string;
   resourceType: ResourceType;
   teams: TeamId[];
-  days: number[];
-  weekIndex: number;
+  dates: string[]; // YYYY-MM-DD
   status: ContentStatus;
   priority: Priority;
   description?: string;

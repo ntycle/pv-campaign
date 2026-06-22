@@ -53,7 +53,7 @@ export async function deleteCampaign(id: string): Promise<void> {
 }
 
 // ── CONTENT ITEMS ──────────────────────────────────────────
-export function subscribeContent(
+export function subscribeContentLegacy(
   monthIndex: number,
   weekIndex: number,
   cb: (data: ContentItem[]) => void
@@ -66,7 +66,7 @@ export function subscribeContent(
   return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<ContentItem>(d))));
 }
 
-export async function createContent(data: Omit<ContentItem, "id">): Promise<string> {
+export async function createContentLegacy(data: Omit<ContentItem, "id">): Promise<string> {
   const ref = await addDoc(collection(db, COLLECTIONS.content), {
     ...data,
     updatedAt: serverTimestamp(),
@@ -74,19 +74,19 @@ export async function createContent(data: Omit<ContentItem, "id">): Promise<stri
   return ref.id;
 }
 
-export async function updateContent(id: string, data: Partial<ContentItem>): Promise<void> {
+export async function updateContentLegacy(id: string, data: Partial<ContentItem>): Promise<void> {
   await updateDoc(doc(db, COLLECTIONS.content, id), {
     ...data,
     updatedAt: serverTimestamp(),
   });
 }
 
-export async function deleteContent(id: string): Promise<void> {
+export async function deleteContentLegacy(id: string): Promise<void> {
   await deleteDoc(doc(db, COLLECTIONS.content, id));
 }
 
 // ── BOOKINGS ───────────────────────────────────────────────
-export function subscribeBookings(
+export function subscribeBookingsLegacy(
   weekIndex: number,
   cb: (data: Booking[]) => void
 ): Unsubscribe {
@@ -97,7 +97,7 @@ export function subscribeBookings(
   return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<Booking>(d))));
 }
 
-export async function createBooking(data: Omit<Booking, "id">): Promise<string> {
+export async function createBookingLegacy(data: Omit<Booking, "id">): Promise<string> {
   const ref = await addDoc(collection(db, COLLECTIONS.bookings), {
     ...data,
     updatedAt: serverTimestamp(),
@@ -105,14 +105,14 @@ export async function createBooking(data: Omit<Booking, "id">): Promise<string> 
   return ref.id;
 }
 
-export async function updateBooking(id: string, data: Partial<Booking>): Promise<void> {
+export async function updateBookingLegacy(id: string, data: Partial<Booking>): Promise<void> {
   await updateDoc(doc(db, COLLECTIONS.bookings, id), {
     ...data,
     updatedAt: serverTimestamp(),
   });
 }
 
-export async function deleteBooking(id: string): Promise<void> {
+export async function deleteBookingLegacy(id: string): Promise<void> {
   await deleteDoc(doc(db, COLLECTIONS.bookings, id));
 }
 
@@ -243,6 +243,82 @@ export async function upsertTeamPlan(
       await addDoc(collection(db, TEAM_PLANS), { ...rest, updatedAt: serverTimestamp() });
     }
   }
+}
+
+// ── CONTENT ITEMS ───────────────────────────────────────────
+const CONTENTS = "contents";
+
+export function subscribeContentItems(
+  campaignId: string,
+  teamId: string,
+  cb: (data: ContentItem[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, CONTENTS),
+    where("campaignId", "==", campaignId),
+    where("teamId", "==", teamId)
+  );
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<ContentItem>(d))));
+}
+
+export function subscribeAllContentItems(
+  cb: (data: ContentItem[]) => void
+): Unsubscribe {
+  const q = collection(db, CONTENTS);
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<ContentItem>(d))));
+}
+
+export async function upsertContentItem(
+  item: Omit<ContentItem, "id"> & { id?: string }
+): Promise<void> {
+  if (item.id) {
+    const { id, ...rest } = item;
+    await updateDoc(doc(db, CONTENTS, id), { ...rest, updatedAt: serverTimestamp() });
+  } else {
+    await addDoc(collection(db, CONTENTS), { ...item, updatedAt: serverTimestamp() });
+  }
+}
+
+export async function deleteContentItem(id: string): Promise<void> {
+  await deleteDoc(doc(db, CONTENTS, id));
+}
+
+// ── BOOKINGS ──────────────────────────────────────────────
+const BOOKINGS = "bookings";
+
+export function subscribeBookings(
+  campaignId: string,
+  teamId: string,
+  cb: (data: Booking[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, BOOKINGS),
+    where("campaignId", "==", campaignId),
+    where("teams", "array-contains", teamId)
+  );
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<Booking>(d))));
+}
+
+export function subscribeAllBookings(
+  cb: (data: Booking[]) => void
+): Unsubscribe {
+  const q = collection(db, BOOKINGS);
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<Booking>(d))));
+}
+
+export async function upsertBooking(
+  booking: Omit<Booking, "id"> & { id?: string }
+): Promise<void> {
+  if (booking.id) {
+    const { id, ...rest } = booking;
+    await updateDoc(doc(db, BOOKINGS, id), { ...rest, updatedAt: serverTimestamp() });
+  } else {
+    await addDoc(collection(db, BOOKINGS), { ...booking, updatedAt: serverTimestamp() });
+  }
+}
+
+export async function deleteBooking(id: string): Promise<void> {
+  await deleteDoc(doc(db, BOOKINGS, id));
 }
 
 // ── USER PROFILES ──────────────────────────────────────────
