@@ -183,66 +183,89 @@ export default function CalendarPage() {
                   </div>
                   <span className="text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded-full">{dayItems.length}</span>
                 </div>
-                {/* Active campaigns */}
-                <div className="px-2 pt-1.5 flex flex-col gap-1">
-                  {activeCamps.filter(c => c.startDate <= dateStr && c.endDate >= dateStr).map(cp => (
-                    <div key={cp.id} className="text-[10px] font-bold px-2 py-0.5 rounded border-l-2 truncate"
-                      style={{ borderColor: cp.color, background: cp.color + "18", color: cp.color }}>
-                      {cp.name}
-                    </div>
-                  ))}
-                </div>
-                {/* Content items and Bookings */}
-                <div className="p-2 flex flex-col gap-1.5 flex-1 relative">
-                  {dayItems.length === 0 && dayBookings.length === 0 ? (
-                    <div className="text-center text-slate-300 text-[10px] py-2">Trống</div>
-                  ) : (
-                    <>
-                      {/* Render Bookings */}
-                      {dayBookings.map(b => {
-                        const rc = RESOURCE_CONFIG[b.resourceType];
-                        return (
-                          <div key={`booking-${b.id}`} className="bg-orange-50 rounded p-1.5 border-l-2 flex flex-col gap-1" style={{ borderColor: "#F97316" }}>
-                            <div className="flex justify-between items-start">
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px]">{rc?.icon}</span>
-                                <span className="text-[9px] font-bold text-orange-600">{rc?.label}</span>
-                              </div>
-                              <div className="scale-75 origin-top-right">
-                                <StatusBadge status={b.status} />
-                              </div>
+                {/* Grouped by Campaign */}
+                <div className="p-1.5 flex flex-col gap-1.5 flex-1 relative">
+                  {(() => {
+                    const cpIds = new Set([
+                      ...activeCamps.filter(c => c.startDate <= dateStr && c.endDate >= dateStr).map(c => c.id),
+                      ...dayItems.map(i => i.campaignId),
+                      ...dayBookings.map(b => b.campaignId)
+                    ].filter(Boolean));
+
+                    const orphanItems = dayItems.filter(i => !i.campaignId);
+                    const orphanBookings = dayBookings.filter(b => !b.campaignId);
+
+                    const renderBooking = (b: Booking, indent: boolean) => {
+                      const rc = RESOURCE_CONFIG[b.resourceType];
+                      return (
+                        <div key={`booking-${b.id}`} className={`bg-orange-50 rounded p-1.5 border-l-2 flex flex-col gap-1 ${indent ? "ml-2" : ""}`} style={{ borderColor: "#F97316" }}>
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px]">{rc?.icon}</span>
+                              <span className="text-[9px] font-bold text-orange-600">{rc?.label}</span>
                             </div>
-                            {b.description && <div className="text-[9px] text-slate-500 truncate">{b.description}</div>}
+                            <div className="scale-75 origin-top-right"><StatusBadge status={b.status} /></div>
                           </div>
-                        );
-                      })}
-                      
-                      {/* Render Content Items */}
-                      {dayItems.map(item => {
-                        const ct = CONTENT_QUOTAS[item.type];
-                        const team = TEAMS.find(t => t.id === item.teamId);
-                    return (
-                      <div
-                        key={item.id}
-                        className="bg-slate-50 rounded p-1.5 cursor-pointer hover:bg-slate-100 transition-colors border-l-2 flex flex-col gap-1"
-                        style={{ borderColor: ct?.color ?? "#ccc" }}
-                        onClick={() => setModal(item)}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px]">{ct?.icon}</span>
-                            <span className="text-[9px] font-bold truncate max-w-[80px]" style={{ color: team?.color }}>{team?.label}</span>
-                          </div>
-                          <div className="scale-75 origin-top-right">
-                            <StatusBadge status={item.status} />
-                          </div>
+                          {b.description && <div className="text-[9px] text-slate-500 truncate">{b.description}</div>}
                         </div>
-                        <div className="text-[10px] font-bold text-slate-700 leading-tight line-clamp-2">{item.title}</div>
-                      </div>
+                      );
+                    };
+
+                    const renderItem = (item: ContentItem, indent: boolean) => {
+                      const ct = CONTENT_QUOTAS[item.type];
+                      const team = TEAMS.find(t => t.id === item.teamId);
+                      return (
+                        <div key={item.id} onClick={() => setModal(item)}
+                          className={`bg-slate-50 rounded p-1.5 cursor-pointer hover:bg-slate-100 transition-colors border-l-2 flex flex-col gap-1 ${indent ? "ml-2" : ""}`}
+                          style={{ borderColor: ct?.color ?? "#ccc" }}>
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px]">{ct?.icon}</span>
+                              <span className="text-[9px] font-bold truncate max-w-[80px]" style={{ color: team?.color }}>{team?.label}</span>
+                            </div>
+                            <div className="scale-75 origin-top-right"><StatusBadge status={item.status} /></div>
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-700 leading-tight line-clamp-2">{item.title}</div>
+                        </div>
+                      );
+                    };
+
+                    if (cpIds.size === 0 && orphanItems.length === 0 && orphanBookings.length === 0) {
+                      return <div className="text-center text-slate-300 text-[10px] py-2">Trống</div>;
+                    }
+
+                    return (
+                      <>
+                        {Array.from(cpIds).map(cpId => {
+                          const cp = campaigns.find(c => c.id === cpId);
+                          if (!cp) return null;
+                          const cItems = dayItems.filter(i => i.campaignId === cpId);
+                          const cBookings = dayBookings.filter(b => b.campaignId === cpId);
+                          const isActiveToday = cp.startDate <= dateStr && cp.endDate >= dateStr;
+
+                          return (
+                            <div key={cp.id} className="flex flex-col gap-1 mb-1">
+                              {isActiveToday && (
+                                <div className="text-[10px] font-bold px-2 py-0.5 rounded border-l-2 truncate"
+                                  style={{ borderColor: cp.color, background: cp.color + "18", color: cp.color }}>
+                                  {cp.name}
+                                </div>
+                              )}
+                              {cBookings.map(b => renderBooking(b, isActiveToday))}
+                              {cItems.map(item => renderItem(item, isActiveToday))}
+                            </div>
+                          );
+                        })}
+
+                        {(orphanBookings.length > 0 || orphanItems.length > 0) && (
+                          <div className="flex flex-col gap-1 mt-1 border-t border-dashed border-slate-200 pt-1">
+                            {orphanBookings.map(b => renderBooking(b, false))}
+                            {orphanItems.map(item => renderItem(item, false))}
+                          </div>
+                        )}
+                      </>
                     );
-                  })}
-                    </>
-                  )}
+                  })()}
                   
                   {/* Add button inline */}
                   <div 
