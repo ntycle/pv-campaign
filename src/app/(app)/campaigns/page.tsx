@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { subscribeCampaigns, createCampaign, updateCampaign, deleteCampaign } from "@/lib/firestore";
-import { TEAMS, BRAND, CAMPAIGN_STATUS_CONFIG } from "@/lib/constants";
+import { subscribeCampaigns, createCampaign, updateCampaign, deleteCampaign, upsertReport } from "@/lib/firestore";
+import { TEAMS, BRAND, CAMPAIGN_STATUS_CONFIG, TEAM_KPI_FIELDS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 
@@ -18,6 +18,7 @@ type FormState = {
   name: string; color: string; status: CampaignStatus;
   startDate: string; endDate: string; teams: TeamId[];
   concept: string; budget: number; targetGmv: number;
+  kpiTargets: Record<TeamId, Record<string, number>>;
 };
 
 const defaultForm = (): FormState => {
@@ -30,6 +31,7 @@ const defaultForm = (): FormState => {
     endDate: format(nextMonth, "yyyy-MM-dd"), 
     teams: [],
     concept: "", budget: 0, targetGmv: 0,
+    kpiTargets: {} as Record<TeamId, Record<string, number>>,
   };
 };
 
@@ -45,16 +47,28 @@ function CampaignModal({
   const [form, setForm] = useState<FormState>(initial ?? defaultForm());
 
   const toggleTeam = (tid: TeamId) =>
+    setForm(p => {
+      const newTeams = p.teams.includes(tid) ? p.teams.filter(t => t !== tid) : [...p.teams, tid];
+      const newKpiTargets = { ...p.kpiTargets };
+      if (!newTeams.includes(tid)) delete newKpiTargets[tid]; // clear KPIs if team removed
+      return { ...p, teams: newTeams, kpiTargets: newKpiTargets };
+    });
+
+  const handleKpiChange = (tid: TeamId, metricId: string, val: number) => {
     setForm(p => ({
       ...p,
-      teams: p.teams.includes(tid) ? p.teams.filter(t => t !== tid) : [...p.teams, tid],
+      kpiTargets: {
+        ...p.kpiTargets,
+        [tid]: { ...(p.kpiTargets[tid] || {}), [metricId]: val }
+      }
     }));
+  };
 
   const isEdit = mode === "edit";
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-auto shadow-2xl">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
           <span className="font-black text-slate-800">
@@ -151,6 +165,41 @@ function CampaignModal({
             </div>
           </div>
 
+          {/* Inline KPI Setup (Only for CREATE mode) */}
+          {!isEdit && form.teams.length > 0 && (
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-3">Giao KPI Tổng cho Campaign</label>
+              <div className="space-y-4">
+                {form.teams.filter(tid => tid !== "campaign").map(tid => {
+                  const team = TEAMS.find(t => t.id === tid);
+                  const fields = TEAM_KPI_FIELDS[tid] || [];
+                  if (fields.length === 0) return null;
+                  return (
+                    <div key={tid} className="border-l-2 pl-3" style={{ borderColor: team?.color }}>
+                      <div className="text-xs font-bold text-slate-700 mb-2">{team?.icon} {team?.label}</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {fields.map(f => (
+                          <div key={f.id} className="flex flex-col">
+                            <span className="text-[10px] font-semibold text-slate-500 mb-0.5">{f.label}</span>
+                            <div className="relative">
+                              <input 
+                                type="number" 
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs focus:outline-none"
+                                value={form.kpiTargets[tid]?.[f.id] || ""}
+                                onChange={e => handleKpiChange(tid, f.id, +e.target.value)}
+                              />
+                              {f.unit && <span className="absolute right-2 top-1.5 text-xs text-slate-400">{f.unit}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Concept */}
           <div>
             <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Concept / Mô tả</label>
@@ -189,7 +238,7 @@ function DeleteDialog({
         <div className="text-4xl text-center mb-3">🗑️</div>
         <h2 className="text-base font-black text-slate-800 text-center mb-1">Xoá Campaign?</h2>
         <p className="text-sm text-slate-500 text-center mb-6">
-          Bạn sắp xoá <span className="font-bold text-slate-700">"{name}"</span>.<br/>
+          Bạn sắp xoá <span className="font-bold text-slate-700">&quot;{name}&quot;</span>.<br/>
           Hành động này không thể hoàn tác.
         </p>
         <div className="flex gap-3">
@@ -231,12 +280,36 @@ export default function CampaignsPage() {
 
   // ── Handlers ──
   const handleCreate = async (data: FormState) => {
-    await createCampaign({ ...data, createdBy: user?.displayName ?? "User" });
+    const { kpiTargets, ...campaignData } = data;
+    const cid = await createCampaign({ ...campaignData, createdBy: user?.displayName ?? "User" });
+    
+    // Save inline KPIs
+    for (const tid of campaignData.teams) {
+      if (!kpiTargets[tid]) continue;
+      for (const [metricId, target] of Object.entries(kpiTargets[tid])) {
+        if (target <= 0) continue;
+        const field = TEAM_KPI_FIELDS[tid]?.find(f => f.id === metricId);
+        if (!field) continue;
+        
+        await upsertReport({
+          campaignId: cid,
+          teamId: tid,
+          metricId,
+          unit: field.unit || "",
+          period: { type: "campaign", value: 0 },
+          target,
+          actual: 0,
+          updatedBy: user?.displayName ?? "User",
+          updatedAt: new Date().toISOString()
+        });
+      }
+    }
   };
 
   const handleEdit = async (data: FormState) => {
     if (!modal || modal.type !== "edit") return;
-    await updateCampaign(modal.campaign.id, data);
+    const { kpiTargets: _kpiTargets, ...campaignData } = data;
+    await updateCampaign(modal.campaign.id, campaignData);
   };
 
   const handleDelete = async () => {

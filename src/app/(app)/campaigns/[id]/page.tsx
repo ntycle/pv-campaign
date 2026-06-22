@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Campaign, ReportEntry, TeamPlan, TeamId, Period } from "@/types";
 
 type Tab = "overview" | "plan" | "report";
-type PeriodType = "week" | "month" | "quarter";
+type PeriodType = "week" | "month" | "quarter" | "campaign";
 
 // ── Progress Ring ─────────────────────────────────────────
 function ProgressRing({ pct, color, size = 48 }: { pct: number; color: string; size?: number }) {
@@ -108,6 +108,7 @@ function TabPlan({ campaign, reports, onUpdate, canEditPlan }: {
   const [periodValue, setPeriodValue] = useState(0);
 
   const periodOptions =
+    periodType === "campaign" ? [{ label: "Tổng Campaign", value: 0 }] :
     periodType === "week"    ? WEEKS.map((w,i) => ({ label: w, value: i })) :
     periodType === "month"   ? MONTHS.map((m,i) => ({ label: m, value: i+1 })) :
     QUARTERS.map((q,i) => ({ label: q, value: i+1 }));
@@ -146,9 +147,9 @@ function TabPlan({ campaign, reports, onUpdate, canEditPlan }: {
       {/* Period selector */}
       <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-wrap gap-3 items-center">
         <div className="flex rounded-lg overflow-hidden border border-slate-200">
-          {(["week","month","quarter"] as PeriodType[]).map(pt => (
+          {(["week","month","quarter", "campaign"] as PeriodType[]).map(pt => (
             <button key={pt}
-              onClick={() => { setPeriodType(pt); setPeriodValue(pt === "week" ? 0 : 1); }}
+              onClick={() => { setPeriodType(pt); setPeriodValue(pt === "week" || pt === "campaign" ? 0 : 1); }}
               className="px-3 py-1.5 text-xs font-bold transition-colors"
               style={periodType === pt
                 ? { background: BRAND.navy, color: "#fff" }
@@ -226,6 +227,7 @@ function TabReport({ campaign, reports }: { campaign: Campaign; reports: ReportE
   const [periodValue, setPeriodValue] = useState(0);
 
   const periodOptions =
+    periodType === "campaign" ? [{ label: "Tổng Campaign", value: 0 }] :
     periodType === "week"  ? WEEKS.map((w,i) => ({ label: w, value: i })) :
     periodType === "month" ? MONTHS.map((m,i) => ({ label: m, value: i+1 })) :
     QUARTERS.map((q,i) => ({ label: q, value: i+1 }));
@@ -250,9 +252,9 @@ function TabReport({ campaign, reports }: { campaign: Campaign; reports: ReportE
       {/* Period selector */}
       <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-wrap gap-3 items-center">
         <div className="flex rounded-lg overflow-hidden border border-slate-200">
-          {(["week","month","quarter"] as PeriodType[]).map(pt => (
+          {(["week","month","quarter", "campaign"] as PeriodType[]).map(pt => (
             <button key={pt}
-              onClick={() => { setPeriodType(pt); setPeriodValue(pt === "week" ? 0 : 1); }}
+              onClick={() => { setPeriodType(pt); setPeriodValue(pt === "week" || pt === "campaign" ? 0 : 1); }}
               className="px-3 py-1.5 text-xs font-bold transition-colors"
               style={periodType === pt
                 ? { background: BRAND.navy, color: "#fff" }

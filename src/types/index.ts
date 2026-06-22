@@ -51,10 +51,10 @@ export interface KpiEntry {
   updatedAt?: string;
 }
 
-// ── Period (week / month / quarter) ────────────────────────
+// ── Period (week / month / quarter / campaign) ───────────────
 export interface Period {
-  type: "week" | "month" | "quarter";
-  value: number;  // week: 0-51 | month: 1-12 | quarter: 1-4
+  type: "week" | "month" | "quarter" | "campaign";
+  value: number;  // week: 0-51 | month: 1-12 | quarter: 1-4 | campaign: 0
 }
 
 // ── Report Entry — UNIFIED structure cho tất cả 6 teams ────
