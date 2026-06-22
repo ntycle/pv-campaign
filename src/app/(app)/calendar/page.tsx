@@ -3,12 +3,12 @@ import { useState, useEffect } from "react";
 import { startOfWeek, endOfWeek, eachDayOfInterval, format, addWeeks, addDays } from "date-fns";
 import { vi } from "date-fns/locale";
 import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
-import { CONTENT_QUOTAS, TEAMS, BRAND, DAYS_FULL } from "@/lib/constants";
-import { subscribeAllContentItems, subscribeCampaigns, upsertContentItem, deleteContentItem } from "@/lib/firestore";
+import { CONTENT_QUOTAS, TEAMS, BRAND, DAYS_FULL, RESOURCE_CONFIG } from "@/lib/constants";
+import { subscribeAllContentItems, subscribeAllBookings, subscribeCampaigns, upsertContentItem, deleteContentItem } from "@/lib/firestore";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
-import type { ContentItem, ContentType, ContentStatus, TeamId, Campaign } from "@/types";
+import type { ContentItem, ContentType, ContentStatus, TeamId, Campaign, Booking } from "@/types";
 
 function ContentModal({
   item, campaigns, selectedDate, user,
@@ -99,6 +99,7 @@ export default function CalendarPage() {
   const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [content, setContent] = useState<ContentItem[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [filterType, setFilterType] = useState("all");
   const [filterTeam, setFilterTeam] = useState("all");
@@ -106,6 +107,7 @@ export default function CalendarPage() {
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
   useEffect(() => subscribeAllContentItems(setContent), []);
+  useEffect(() => subscribeAllBookings(setBookings), []);
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekEnd = addDays(addWeeks(weekStart, 4), -1);
@@ -169,6 +171,7 @@ export default function CalendarPage() {
           {weekDays.map((day, di) => {
             const dateStr = format(day, "yyyy-MM-dd");
             const dayItems = filtered.filter(c => c.date === dateStr);
+            const dayBookings = bookings.filter(b => b.dates.includes(dateStr) && (filterTeam === "all" || b.teams.includes(filterTeam as TeamId)));
             const isToday = format(new Date(), "yyyy-MM-dd") === dateStr;
 
             return (
@@ -189,13 +192,35 @@ export default function CalendarPage() {
                     </div>
                   ))}
                 </div>
-                {/* Content items */}
+                {/* Content items and Bookings */}
                 <div className="p-2 flex flex-col gap-1.5 flex-1 relative">
-                  {dayItems.length === 0 ? (
+                  {dayItems.length === 0 && dayBookings.length === 0 ? (
                     <div className="text-center text-slate-300 text-[10px] py-2">Trống</div>
-                  ) : dayItems.map(item => {
-                    const ct = CONTENT_QUOTAS[item.type];
-                    const team = TEAMS.find(t => t.id === item.teamId);
+                  ) : (
+                    <>
+                      {/* Render Bookings */}
+                      {dayBookings.map(b => {
+                        const rc = RESOURCE_CONFIG[b.resourceType];
+                        return (
+                          <div key={`booking-${b.id}`} className="bg-orange-50 rounded p-1.5 border-l-2 flex flex-col gap-1" style={{ borderColor: "#F97316" }}>
+                            <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px]">{rc?.icon}</span>
+                                <span className="text-[9px] font-bold text-orange-600">{rc?.label}</span>
+                              </div>
+                              <div className="scale-75 origin-top-right">
+                                <StatusBadge status={b.status} />
+                              </div>
+                            </div>
+                            {b.description && <div className="text-[9px] text-slate-500 truncate">{b.description}</div>}
+                          </div>
+                        );
+                      })}
+                      
+                      {/* Render Content Items */}
+                      {dayItems.map(item => {
+                        const ct = CONTENT_QUOTAS[item.type];
+                        const team = TEAMS.find(t => t.id === item.teamId);
                     return (
                       <div
                         key={item.id}
@@ -216,6 +241,8 @@ export default function CalendarPage() {
                       </div>
                     );
                   })}
+                    </>
+                  )}
                   
                   {/* Add button inline */}
                   <div 

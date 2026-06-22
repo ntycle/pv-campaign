@@ -104,7 +104,7 @@ export interface Campaign {
 }
 
 // ── Content Item ────────────────────────────────────────────
-export type ContentType = "post" | "video" | "sku" | "article";
+export type ContentType = "post" | "video" | "sku" | "article" | "event";
 export type ContentStatus = "pending" | "approved" | "running" | "done" | "blocked";
 
 export interface ContentItem {

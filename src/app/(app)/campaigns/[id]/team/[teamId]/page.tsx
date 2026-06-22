@@ -7,7 +7,7 @@ import {
   subscribeContentItems, upsertContentItem, deleteContentItem,
   subscribeBookings, upsertBooking, deleteBooking
 } from "@/lib/firestore";
-import { TEAM_MAP, BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS, RESOURCE_CONFIG } from "@/lib/constants";
+import { TEAM_MAP, BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS, RESOURCE_CONFIG, CONTENT_QUOTAS } from "@/lib/constants";
 import { useAuth } from "@/hooks/useAuth";
 import type { Campaign, ReportEntry, TeamId, Period, ContentItem, Booking, ContentType, ResourceType, Priority } from "@/types";
 
@@ -44,10 +44,7 @@ function ProductionPanel({
           <div className="flex gap-2">
             <input type="date" min={campaign.startDate} max={campaign.endDate} className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={date} onChange={e => setDate(e.target.value)} />
             <select className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={type} onChange={e => setType(e.target.value as ContentType)}>
-              <option value="post">Bài viết</option>
-              <option value="video">Video</option>
-              <option value="sku">SKU</option>
-              <option value="article">Article</option>
+              {Object.entries(CONTENT_QUOTAS).map(([k,v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
             </select>
             <button onClick={handleAdd} disabled={saving || !title} className="px-4 py-2 text-white rounded text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: BRAND.navy }}>Thêm</button>
           </div>

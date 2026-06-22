@@ -91,6 +91,7 @@ export const CONTENT_QUOTAS = {
   video:   { label: "Short Video", icon: "🎥", weekly: 4,  color: "#8B5CF6" },
   sku:     { label: "SKU Tối ưu",  icon: "📦", weekly: 30, color: "#F59E0B" },
   article: { label: "Article SEO", icon: "📰", weekly: 10, color: "#10B981" },
+  event:   { label: "Event/POSM",  icon: "🏪", weekly: 5,  color: "#EC4899" },
 };
 
 export const CAMPAIGN_STATUS_CONFIG = {
