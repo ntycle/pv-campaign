@@ -40,4 +40,5 @@ export const COLLECTIONS = {
   content:   "content",
   bookings:  "bookings",
   kpis:      "kpis",
+  resource_quotas: "resource_quotas",
 } as const;

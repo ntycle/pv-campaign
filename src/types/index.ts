@@ -129,12 +129,23 @@ export interface Booking {
   campaignId: string;
   resourceType: ResourceType;
   teams: TeamId[];
-  dates: string[]; // YYYY-MM-DD
+  dates: string[]; // YYYY-MM-DD - requested/booked dates
   status: ContentStatus;
   priority: Priority;
   description?: string;
+  deliveredDate?: string; // YYYY-MM-DD - actual handover/delivery date
+  confirmedAt?: string;   // ISO timestamp when confirmed
   updatedBy?: string;
   updatedAt?: string;
+}
+
+// ── Resource Quota ──────────────────────────────────────────
+export interface ResourceQuota {
+  id: string;
+  resourceType: ResourceType;
+  timeframe: "default" | "week" | "month";
+  timeValue: string; // e.g. "default", "2026-W26", "2026-06"
+  capacity: number; // total slots across ALL teams/campaigns in this period
 }
 
 // ── Auth ────────────────────────────────────────────────────

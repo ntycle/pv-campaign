@@ -9,8 +9,25 @@ import {
 import { db, COLLECTIONS } from "./firebase";
 import type {
   Campaign, ContentItem, Booking, KpiEntry, TeamId,
-  ReportEntry, TeamPlan, UserProfile, Period,
+  ReportEntry, TeamPlan, UserProfile, Period, ResourceQuota,
 } from "@/types";
+
+// ── RESOURCE QUOTAS ────────────────────────────────────────
+export function subscribeResourceQuotas(cb: (data: ResourceQuota[]) => void): Unsubscribe {
+  const q = collection(db, COLLECTIONS.resource_quotas);
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<ResourceQuota>(d))));
+}
+
+export async function upsertResourceQuota(data: Omit<ResourceQuota, "id"> & { id?: string }): Promise<void> {
+  if (data.id) {
+    const { id, ...rest } = data;
+    await updateDoc(doc(db, COLLECTIONS.resource_quotas, id), { ...rest, updatedAt: serverTimestamp() });
+  } else {
+    // Determine ID based on resourceType + timeframe + timeValue
+    const customId = `${data.resourceType}_${data.timeframe}_${data.timeValue}`;
+    await setDoc(doc(db, COLLECTIONS.resource_quotas, customId), { ...data, updatedAt: serverTimestamp() });
+  }
+}
 
 // ── helpers ────────────────────────────────────────────────
 function fromFirestore<T>(snap: { id: string; data(): Record<string, unknown> }): T {

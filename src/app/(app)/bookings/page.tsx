@@ -123,6 +123,8 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [modal, setModal] = useState<Booking | true | null>(null);
+  const [confirmingBooking, setConfirmingBooking] = useState<Booking | null>(null);
+  const [deliveredDate, setDeliveredDate] = useState("");
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
   useEffect(() => subscribeAllBookings(setBookings), []);
@@ -142,6 +144,19 @@ export default function BookingsPage() {
     } else if (modal && typeof modal === "object") {
       await upsertBooking({ ...data, id: modal.id });
     }
+  };
+
+  const handleConfirm = async () => {
+    if (!confirmingBooking) return;
+    await upsertBooking({
+      ...confirmingBooking,
+      status: "approved",
+      deliveredDate: deliveredDate || format(new Date(), "yyyy-MM-dd"),
+      confirmedAt: new Date().toISOString(),
+      updatedBy: user?.displayName ?? "User",
+    });
+    setConfirmingBooking(null);
+    setDeliveredDate("");
   };
 
   // Resource usage (calculate based on currently filtered bookings)
@@ -200,7 +215,7 @@ export default function BookingsPage() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr style={{ background: BRAND.navy }}>
-                  {["Campaign","Tài nguyên","Teams","Ngày","Mô tả","Trạng thái",""].map((h,i) => (
+                  {["Campaign","Tài nguyên","Teams","Ngày book","Ngày giao","Mô tả","Trạng thái",""].map((h,i) => (
                     <th key={i} className="px-4 py-2.5 text-left text-xs font-bold text-white">{h}</th>
                   ))}
                 </tr>
@@ -233,8 +248,32 @@ export default function BookingsPage() {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-2.5 text-xs font-bold">
+                        {b.deliveredDate ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-emerald-600">{format(new Date(b.deliveredDate), "dd/MM/yyyy")}</span>
+                            <span className="text-[10px] text-slate-400">Đã giao</span>
+                          </div>
+                        ) : b.status === "approved" ? (
+                          <span className="text-slate-400 text-[10px]">—</span>
+                        ) : (
+                          <span className="text-[10px] text-slate-300 italic">Chờ xác nhận</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 text-xs text-slate-400 max-w-36 truncate">{b.description || "—"}</td>
-                      <td className="px-4 py-2.5"><StatusBadge status={b.status} /></td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={b.status} />
+                          {b.status === "pending" && (
+                            <button
+                              onClick={() => { setConfirmingBooking(b); setDeliveredDate(format(new Date(), "yyyy-MM-dd")); }}
+                              className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 font-bold rounded border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                            >
+                              Xác nhận
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-2.5">
                         <div className="flex gap-1">
                           <button onClick={() => setModal(b)} className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded hover:bg-blue-100">✏️</button>
@@ -259,6 +298,54 @@ export default function BookingsPage() {
           onSave={handleSave}
           onClose={() => setModal(null)}
         />
+      )}
+
+      {/* Confirm modal */}
+      {confirmingBooking && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <span className="font-black text-slate-800 text-sm">✅ Xác nhận giao tài nguyên</span>
+              <button onClick={() => setConfirmingBooking(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-slate-50 rounded-lg p-3 text-xs">
+                <div className="font-bold text-slate-700 mb-1">
+                  {RESOURCE_CONFIG[confirmingBooking.resourceType]?.icon} {RESOURCE_CONFIG[confirmingBooking.resourceType]?.label}
+                </div>
+                <div className="text-slate-500">
+                  Ngày book: {confirmingBooking.dates.length > 1
+                    ? `${format(new Date(confirmingBooking.dates[0]), "dd/MM")} - ${format(new Date(confirmingBooking.dates[confirmingBooking.dates.length-1]), "dd/MM")}`
+                    : format(new Date(confirmingBooking.dates[0]), "dd/MM/yyyy")}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1.5">📅 Ngày giao thực tế</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  value={deliveredDate}
+                  onChange={e => setDeliveredDate(e.target.value)}
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Ngày tài nguyên thực tế được bàn giao hoặc bắt đầu sử dụng.</p>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => { setConfirmingBooking(null); setDeliveredDate(""); }}
+                  className="flex-1 px-4 py-2 text-xs font-bold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
+                >
+                  Huỷ
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  className="flex-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-emerald-600 hover:bg-emerald-700"
+                >
+                  Xác nhận giao
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

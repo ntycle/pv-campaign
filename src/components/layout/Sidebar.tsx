@@ -6,13 +6,14 @@ import { BRAND } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/dashboard",  icon: "⚡", label: "Dashboard"         },
-  { href: "/campaigns",  icon: "🏆", label: "Campaigns"         },
-  { href: "/calendar",   icon: "📅", label: "Lịch Tuần"        },
-  { href: "/tracker",    icon: "📋", label: "Content Tracker"   },
-  { href: "/bookings",   icon: "🔒", label: "Booking Tài nguyên"},
-  { href: "/kpis",       icon: "📊", label: "KPI Teams"        },
-  { href: "/conflicts",  icon: "⚠️", label: "Conflict Check"   },
+  { href: "/dashboard",          icon: "⚡", label: "Dashboard"           },
+  { href: "/campaigns",          icon: "🏆", label: "Campaigns"           },
+  { href: "/calendar",           icon: "📅", label: "Lịch Tuần"           },
+  { href: "/tracker",            icon: "📋", label: "Content Tracker"     },
+  { href: "/bookings",           icon: "🔒", label: "Booking Tài nguyên"  },
+  { href: "/bookings/settings",  icon: "⚙️", label: "Thiết Lập Tài Nguyên"},
+  { href: "/kpis",               icon: "📊", label: "KPI Teams"           },
+  { href: "/conflicts",          icon: "⚠️", label: "Conflict Check"      },
 ];
 
 export function Sidebar() {
@@ -41,7 +42,10 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 py-4 overflow-y-auto">
         {NAV.map(item => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const active =
+            item.href === "/bookings"
+              ? pathname === "/bookings"
+              : pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
               key={item.href}

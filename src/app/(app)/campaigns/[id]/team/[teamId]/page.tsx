@@ -5,11 +5,12 @@ import { format, eachDayOfInterval } from "date-fns";
 import {
   subscribeCampaigns, subscribeReports, upsertReport,
   subscribeContentItems, upsertContentItem, deleteContentItem,
-  subscribeBookings, upsertBooking, deleteBooking
+  subscribeBookings, subscribeAllBookings, upsertBooking, deleteBooking,
+  subscribeResourceQuotas
 } from "@/lib/firestore";
 import { TEAM_MAP, BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS, RESOURCE_CONFIG, CONTENT_QUOTAS } from "@/lib/constants";
 import { useAuth } from "@/hooks/useAuth";
-import type { Campaign, ReportEntry, TeamId, Period, ContentItem, Booking, ContentType, ResourceType, Priority } from "@/types";
+import type { Campaign, ReportEntry, TeamId, Period, ContentItem, Booking, ContentType, ResourceType, Priority, ResourceQuota } from "@/types";
 
 type PeriodType = "week" | "month" | "quarter" | "campaign";
 
@@ -68,9 +69,11 @@ function ProductionPanel({
 
 // ── Resource Booking Panel ─────────────────────────────────
 function ResourceBookingPanel({
-  teamId, campaign, bookings, canEdit, userName,
+  teamId, campaign, bookings, allBookings, quotas, canEdit, userName,
 }: {
-  teamId: TeamId; campaign: Campaign; bookings: Booking[]; canEdit: boolean; userName: string;
+  teamId: TeamId; campaign: Campaign; bookings: Booking[];
+  allBookings: Booking[]; quotas: ResourceQuota[];
+  canEdit: boolean; userName: string;
 }) {
   const [resource, setResource] = useState<ResourceType>("design_slot");
   const [startDate, setStartDate] = useState<string>(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
@@ -79,10 +82,35 @@ function ResourceBookingPanel({
   const [priority, setPriority] = useState<Priority>("medium");
   const [saving, setSaving] = useState(false);
 
+  // Calculate remaining slots for selected resource and date range
+  const calculateRemainingSlots = () => {
+    if (!startDate || !endDate) return null;
+    const cfg = RESOURCE_CONFIG[resource];
+    // Find the most specific quota: week > default
+    const dateRange = eachDayOfInterval({ start: new Date(startDate), end: new Date(endDate) }).map(d => format(d, "yyyy-MM-dd"));
+    // Get max usage across all days in the range
+    let maxUsed = 0;
+    dateRange.forEach(dateStr => {
+      const used = allBookings.filter(b => b.resourceType === resource && b.dates.includes(dateStr)).length;
+      if (used > maxUsed) maxUsed = used;
+    });
+    // Find capacity from quotas or fall back to default
+    const specificQuota = quotas.find(q => q.resourceType === resource && q.timeframe === "default");
+    const capacity = specificQuota?.capacity ?? cfg.capacity;
+    return { used: maxUsed, capacity, remaining: Math.max(0, capacity - maxUsed) };
+  };
+
+  const slotInfo = calculateRemainingSlots();
+  const isOverCapacity = slotInfo !== null && slotInfo.remaining <= 0;
+
   const handleAdd = async () => {
     if (!startDate || !endDate) return;
     if (startDate > endDate) {
       alert("Ngày kết thúc phải sau ngày bắt đầu!");
+      return;
+    }
+    if (isOverCapacity) {
+      alert("Không còn slot trống cho tài nguyên này trong khoảng ngày đã chọn!");
       return;
     }
     const dateArray = eachDayOfInterval({ start: new Date(startDate), end: new Date(endDate) }).map(d => format(d, "yyyy-MM-dd"));
@@ -108,6 +136,21 @@ function ResourceBookingPanel({
             <span className="self-center text-xs text-slate-400">đến</span>
             <input type="date" min={startDate} max={campaign.endDate} className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
           </div>
+
+          {/* Slot availability indicator */}
+          {slotInfo !== null && (
+            <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold border ${
+              isOverCapacity
+                ? "bg-red-50 border-red-200 text-red-600"
+                : slotInfo.remaining <= 1
+                  ? "bg-amber-50 border-amber-200 text-amber-600"
+                  : "bg-emerald-50 border-emerald-200 text-emerald-700"
+            }`}>
+              <span>{isOverCapacity ? "🔴 Hết slot!" : slotInfo.remaining <= 1 ? "🟡 Sắp hết" : "🟢 Còn slot"}</span>
+              <span>Còn trống: {slotInfo.remaining}/{slotInfo.capacity} slot</span>
+            </div>
+          )}
+
           <input type="text" placeholder="Ghi chú thêm..." className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
           <div className="flex gap-2">
             <select className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={priority} onChange={e => setPriority(e.target.value as Priority)}>
@@ -115,7 +158,7 @@ function ResourceBookingPanel({
               <option value="medium">Medium</option>
               <option value="low">Low</option>
             </select>
-            <button onClick={handleAdd} disabled={saving || !startDate || !endDate} className="px-4 py-2 text-white rounded text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: BRAND.navy }}>Book</button>
+            <button onClick={handleAdd} disabled={saving || !startDate || !endDate || isOverCapacity} className="px-4 py-2 text-white rounded text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: isOverCapacity ? "#DC2626" : BRAND.navy }}>Book</button>
           </div>
         </div>
       )}
@@ -320,6 +363,8 @@ export default function TeamWorkspacePage({
   const [reports, setReports]     = useState<ReportEntry[]>([]);
   const [contents, setContents]   = useState<ContentItem[]>([]);
   const [bookings, setBookings]   = useState<Booking[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
+  const [quotas, setQuotas]       = useState<ResourceQuota[]>([]);
   const [loading, setLoading]     = useState(true);
 
   useEffect(() => {
@@ -332,6 +377,8 @@ export default function TeamWorkspacePage({
   useEffect(() => subscribeReports(id, setReports), [id]);
   useEffect(() => subscribeContentItems(id, tid, setContents), [id, tid]);
   useEffect(() => subscribeBookings(id, tid, setBookings), [id, tid]);
+  useEffect(() => subscribeAllBookings(setAllBookings), []);
+  useEffect(() => subscribeResourceQuotas(setQuotas), []);
 
   const myReports   = reports.filter(r => r.teamId === tid);
   const editAllowed = canEdit(tid);
@@ -391,6 +438,8 @@ export default function TeamWorkspacePage({
             teamId={tid}
             campaign={campaign}
             bookings={bookings}
+            allBookings={allBookings}
+            quotas={quotas}
             canEdit={editAllowed}
             userName={userName}
           />
