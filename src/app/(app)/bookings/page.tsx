@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { format, startOfWeek, endOfWeek } from "date-fns";
+import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
 import { RESOURCE_CONFIG, TEAMS, BRAND } from "@/lib/constants";
 import { subscribeAllBookings, subscribeCampaigns, upsertBooking, deleteBooking } from "@/lib/firestore";
@@ -24,7 +24,9 @@ function BookingModal({
     ...(item ? { ...item } : {}),
   });
 
-  const [datesInput, setDatesInput] = useState(form.dates.join(", "));
+  const sortedDates = [...form.dates].sort();
+  const [startDate, setStartDate] = useState(sortedDates[0] || selectedDate);
+  const [endDate, setEndDate] = useState(sortedDates[sortedDates.length - 1] || selectedDate);
 
   const toggleTeam = (tid: TeamId) =>
     setForm(p => ({ ...p, teams: p.teams.includes(tid) ? p.teams.filter(t=>t!==tid) : [...p.teams, tid] }));
@@ -79,8 +81,11 @@ function BookingModal({
 
           <div>
             <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-2">Ngày triển khai</label>
-            <input type="text" placeholder="VD: 2026-06-25, 2026-06-26" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none" value={datesInput} onChange={e => setDatesInput(e.target.value)} />
-            <div className="text-[10px] text-slate-400 mt-1">Các ngày phân tách bởi dấu phẩy. Định dạng YYYY-MM-DD.</div>
+            <div className="flex gap-2">
+              <input type="date" className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={startDate} onChange={e => { setStartDate(e.target.value); if (e.target.value > endDate) setEndDate(e.target.value); }} />
+              <span className="self-center text-xs text-slate-400">đến</span>
+              <input type="date" min={startDate} className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
           </div>
 
           <div>
@@ -92,10 +97,15 @@ function BookingModal({
           <button onClick={onClose} className="px-3 py-1.5 text-sm font-bold text-slate-500">Hủy</button>
           <button
             onClick={() => {
-              const dateArray = datesInput.split(",").map(d => d.trim()).filter(Boolean);
+              if (startDate > endDate) {
+                alert("Ngày kết thúc phải sau ngày bắt đầu!");
+                return;
+              }
+              const dateArray = eachDayOfInterval({ start: new Date(startDate), end: new Date(endDate) }).map(d => format(d, "yyyy-MM-dd"));
               onSave({...form, dates: dateArray, updatedBy: user});
               onClose(); 
             }}
+            disabled={!startDate || !endDate}
             className="px-4 py-1.5 text-sm font-black text-white rounded-lg"
             style={{ background: BRAND.navy }}
           >
@@ -213,12 +223,15 @@ export default function BookingsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-2.5 text-xs font-bold text-slate-600">
-                        {b.dates.map((d, idx) => (
-                          <span key={d} className={d >= weekStartStr && d <= weekEndStr ? "text-blue-600" : ""}>
-                            {format(new Date(d), "dd/MM")}
-                            {idx < b.dates.length - 1 ? ", " : ""}
+                        {b.dates.length > 1 ? (
+                          <span className={b.dates.some(d => d >= weekStartStr && d <= weekEndStr) ? "text-blue-600" : ""}>
+                            {format(new Date(b.dates[0]), "dd/MM")} - {format(new Date(b.dates[b.dates.length - 1]), "dd/MM")}
                           </span>
-                        ))}
+                        ) : (
+                          <span className={b.dates[0] >= weekStartStr && b.dates[0] <= weekEndStr ? "text-blue-600" : ""}>
+                            {format(new Date(b.dates[0]), "dd/MM")}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-xs text-slate-400 max-w-36 truncate">{b.description || "—"}</td>
                       <td className="px-4 py-2.5"><StatusBadge status={b.status} /></td>

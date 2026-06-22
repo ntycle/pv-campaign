@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, eachDayOfInterval } from "date-fns";
 import {
   subscribeCampaigns, subscribeReports, upsertReport,
   subscribeContentItems, upsertContentItem, deleteContentItem,
@@ -76,20 +76,25 @@ function ResourceBookingPanel({
   teamId: TeamId; campaign: Campaign; bookings: Booking[]; canEdit: boolean; userName: string;
 }) {
   const [resource, setResource] = useState<ResourceType>("design_slot");
-  const [dates, setDates] = useState<string>(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
+  const [startDate, setStartDate] = useState<string>(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState<string>(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
   const [desc, setDesc] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [saving, setSaving] = useState(false);
 
   const handleAdd = async () => {
-    if (!dates) return;
-    const dateArray = dates.split(",").map(d => d.trim()).filter(Boolean);
+    if (!startDate || !endDate) return;
+    if (startDate > endDate) {
+      alert("Ngày kết thúc phải sau ngày bắt đầu!");
+      return;
+    }
+    const dateArray = eachDayOfInterval({ start: new Date(startDate), end: new Date(endDate) }).map(d => format(d, "yyyy-MM-dd"));
     setSaving(true);
     await upsertBooking({
       campaignId: campaign.id, teams: [teamId], resourceType: resource, dates: dateArray,
       priority, status: "pending", description: desc, updatedBy: userName
     });
-    setDates(""); setDesc("");
+    setDesc("");
     setSaving(false);
   };
 
@@ -101,7 +106,11 @@ function ResourceBookingPanel({
           <select className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={resource} onChange={e => setResource(e.target.value as ResourceType)}>
             {Object.entries(RESOURCE_CONFIG).map(([k,v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
           </select>
-          <input type="text" placeholder="Các ngày cần (VD: 2026-06-25, 2026-06-26)" className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={dates} onChange={e => setDates(e.target.value)} />
+          <div className="flex gap-2">
+            <input type="date" min={campaign.startDate} max={campaign.endDate} className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={startDate} onChange={e => { setStartDate(e.target.value); if (e.target.value > endDate) setEndDate(e.target.value); }} />
+            <span className="self-center text-xs text-slate-400">đến</span>
+            <input type="date" min={startDate} max={campaign.endDate} className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
+          </div>
           <input type="text" placeholder="Ghi chú thêm..." className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
           <div className="flex gap-2">
             <select className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={priority} onChange={e => setPriority(e.target.value as Priority)}>
@@ -109,7 +118,7 @@ function ResourceBookingPanel({
               <option value="medium">Medium</option>
               <option value="low">Low</option>
             </select>
-            <button onClick={handleAdd} disabled={saving || !dates} className="px-4 py-2 text-white rounded text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: BRAND.navy }}>Book</button>
+            <button onClick={handleAdd} disabled={saving || !startDate || !endDate} className="px-4 py-2 text-white rounded text-sm font-bold transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: BRAND.navy }}>Book</button>
           </div>
         </div>
       )}
@@ -120,7 +129,11 @@ function ResourceBookingPanel({
               <span className="font-bold text-slate-700">{RESOURCE_CONFIG[b.resourceType]?.icon} {RESOURCE_CONFIG[b.resourceType]?.label}</span>
               {canEdit && <button onClick={() => deleteBooking(b.id)} className="text-red-500 text-xs font-bold hover:underline">Xóa</button>}
             </div>
-            <div className="text-[10px] font-black text-slate-500 mb-1">{b.dates.join(", ")}</div>
+            <div className="text-[10px] font-black text-slate-500 mb-1">
+              {b.dates.length > 1 
+                ? `${format(new Date(b.dates[0]), "dd/MM/yyyy")} - ${format(new Date(b.dates[b.dates.length - 1]), "dd/MM/yyyy")}` 
+                : format(new Date(b.dates[0]), "dd/MM/yyyy")}
+            </div>
             {b.description && <div className="text-xs italic text-slate-600">{b.description}</div>}
           </div>
         ))}
