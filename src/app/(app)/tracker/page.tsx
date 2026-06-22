@@ -1,39 +1,44 @@
 "use client";
 import { useState, useEffect } from "react";
-import { WeekHeader } from "@/components/layout/WeekHeader";
+import { format, startOfWeek, endOfWeek } from "date-fns";
+import { vi } from "date-fns/locale";
+import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
 import { CONTENT_QUOTAS, TEAMS, STATUS_CONFIG, BRAND } from "@/lib/constants";
-import { subscribeContentLegacy as subscribeContent, subscribeCampaigns, updateContentLegacy as updateContent, deleteContentLegacy as deleteContent } from "@/lib/firestore";
+import { subscribeAllContentItems, subscribeCampaigns, upsertContentItem } from "@/lib/firestore";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { DAYS_SHORT } from "@/lib/constants";
 import { pct } from "@/lib/utils";
 import type { ContentItem, ContentStatus, Campaign } from "@/types";
 
 export default function TrackerPage() {
-  const [week, setWeek] = useState(0);
-  const [month, setMonth] = useState(new Date().getMonth());
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [content, setContent] = useState<ContentItem[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState<ContentStatus>("pending");
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
-  useEffect(() => subscribeContent(month, week, setContent), [month, week]);
+  useEffect(() => subscribeAllContentItems(setContent), []);
 
   const campMap = Object.fromEntries(campaigns.map(c => [c.id, c]));
 
+  const weekStartStr = format(startOfWeek(currentDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const weekEndStr = format(endOfWeek(currentDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+
+  const filteredContent = content.filter(c => c.date >= weekStartStr && c.date <= weekEndStr);
+
   const handleStatusSave = async (item: ContentItem) => {
-    await updateContent(item.id, { status: editStatus });
+    await upsertContentItem({ ...item, status: editStatus });
     setEditId(null);
   };
 
   return (
     <div className="flex flex-col min-h-screen">
-      <WeekHeader activeWeek={week} onChange={setWeek} title="Content Tracker" activeMonth={month} onMonthChange={setMonth} />
+      <DateWeekHeader currentDate={currentDate} onChange={setCurrentDate} title="Content Tracker" />
 
       <div className="flex-1 p-6 space-y-6">
         {Object.entries(CONTENT_QUOTAS).map(([type, cfg]) => {
-          const items = content.filter(c => c.type === type);
+          const items = filteredContent.filter(c => c.type === type);
           const done  = items.filter(c => c.status === "done").length;
           const p     = pct(items.length, cfg.weekly);
 
@@ -68,7 +73,7 @@ export default function TrackerPage() {
                   </thead>
                   <tbody>
                     {items.length === 0 ? (
-                      <tr><td colSpan={7} className="py-6 text-center text-slate-300 text-xs">Chưa có nội dung</td></tr>
+                      <tr><td colSpan={7} className="py-6 text-center text-slate-300 text-xs">Chưa có nội dung tuần này</td></tr>
                     ) : items.map((item, i) => {
                       const cp = campMap[item.campaignId];
                       const isEditing = editId === item.id;
@@ -81,7 +86,7 @@ export default function TrackerPage() {
                               <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ color: cp.color, background: cp.color + "18" }}>{cp.name}</span>
                             ) : <span className="text-slate-300 text-xs">—</span>}
                           </td>
-                          <td className="px-4 py-2.5 font-bold text-xs">{DAYS_SHORT[item.day]}</td>
+                          <td className="px-4 py-2.5 font-bold text-xs">{format(new Date(item.date), "EEEE, dd/MM", { locale: vi })}</td>
                           <td className="px-4 py-2.5">
                             {isEditing ? (
                               <select
@@ -98,17 +103,14 @@ export default function TrackerPage() {
                             )}
                           </td>
                           <td className="px-4 py-2.5 text-xs text-slate-400">{item.note || "—"}</td>
-                          <td className="px-4 py-2.5">
-                            {isEditing ? (
-                              <div className="flex gap-1">
-                                <button onClick={() => handleStatusSave(item)} className="text-xs bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded hover:bg-emerald-100">✓</button>
-                                <button onClick={() => setEditId(null)} className="text-xs bg-red-50 text-red-600 font-bold px-2 py-0.5 rounded">✕</button>
-                              </div>
-                            ) : (
+                          <td className="px-4 py-2.5 text-right">
+                            {isEditing && (
                               <button
-                                onClick={() => window.confirm("Xóa item này?") && deleteContent(item.id)}
-                                className="text-xs text-slate-300 hover:text-red-400 px-1"
-                              >🗑</button>
+                                onClick={() => handleStatusSave(item)}
+                                className="text-xs font-bold px-3 py-1 bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-100"
+                              >
+                                Lưu
+                              </button>
                             )}
                           </td>
                         </tr>
