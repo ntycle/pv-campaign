@@ -169,6 +169,22 @@ export function subscribeReportsByTeam(
   return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<ReportEntry>(d))));
 }
 
+export async function getCampaignKPIs(campaignId: string): Promise<Record<string, Record<string, number>>> {
+  const q = query(
+    collection(db, REPORTS),
+    where("campaignId", "==", campaignId),
+    where("period.type", "==", "campaign")
+  );
+  const snap = await getDocs(q);
+  const result: Record<string, Record<string, number>> = {};
+  snap.docs.forEach(d => {
+    const data = fromFirestore<ReportEntry>(d);
+    if (!result[data.teamId]) result[data.teamId] = {};
+    result[data.teamId][data.metricId] = data.target;
+  });
+  return result;
+}
+
 /** Upsert by (campaignId + teamId + metricId + period.type + period.value) */
 export async function upsertReport(
   entry: Omit<ReportEntry, "id"> & { id?: string }

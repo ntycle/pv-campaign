@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { subscribeCampaigns, createCampaign, updateCampaign, deleteCampaign, upsertReport } from "@/lib/firestore";
+import { subscribeCampaigns, createCampaign, updateCampaign, deleteCampaign, upsertReport, getCampaignKPIs } from "@/lib/firestore";
 import { TEAMS, BRAND, CAMPAIGN_STATUS_CONFIG, TEAM_KPI_FIELDS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -165,8 +165,8 @@ function CampaignModal({
             </div>
           </div>
 
-          {/* Inline KPI Setup (Only for CREATE mode) */}
-          {!isEdit && form.teams.length > 0 && (
+          {/* Inline KPI Setup */}
+          {form.teams.length > 0 && (
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
               <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-3">Giao KPI Tổng cho Campaign</label>
               <div className="space-y-4">
@@ -269,7 +269,7 @@ export default function CampaignsPage() {
   // Modal state
   const [modal, setModal] = useState<
     | { type: "create" }
-    | { type: "edit"; campaign: Campaign }
+    | { type: "edit"; campaign: Campaign; kpiTargets: Record<TeamId, Record<string, number>> }
     | null
   >(null);
 
@@ -308,8 +308,41 @@ export default function CampaignsPage() {
 
   const handleEdit = async (data: FormState) => {
     if (!modal || modal.type !== "edit") return;
-    const { kpiTargets: _kpiTargets, ...campaignData } = data;
+    const { kpiTargets, ...campaignData } = data;
     await updateCampaign(modal.campaign.id, campaignData);
+    
+    // Save inline KPIs
+    const cid = modal.campaign.id;
+    for (const tid of campaignData.teams) {
+      if (!kpiTargets[tid]) continue;
+      for (const [metricId, target] of Object.entries(kpiTargets[tid])) {
+        if (target <= 0) continue;
+        const field = TEAM_KPI_FIELDS[tid]?.find(f => f.id === metricId);
+        if (!field) continue;
+        
+        await upsertReport({
+          campaignId: cid,
+          teamId: tid,
+          metricId,
+          unit: field.unit || "",
+          period: { type: "campaign", value: 0 },
+          target,
+          actual: 0,
+          updatedBy: user?.displayName ?? "User",
+          updatedAt: new Date().toISOString()
+        });
+      }
+    }
+  };
+
+  const handleOpenEdit = async (cp: Campaign) => {
+    try {
+      const existingKpis = await getCampaignKPIs(cp.id);
+      setModal({ type: "edit", campaign: cp, kpiTargets: existingKpis as any });
+    } catch (e) {
+      console.error(e);
+      setModal({ type: "edit", campaign: cp, kpiTargets: {} as any });
+    }
   };
 
   const handleDelete = async () => {
@@ -375,7 +408,7 @@ export default function CampaignsPage() {
 
                     {/* Edit button */}
                     <button
-                      onClick={() => setModal({ type: "edit", campaign: cp })}
+                      onClick={() => handleOpenEdit(cp)}
                       title="Chỉnh sửa"
                       className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                     >
@@ -438,6 +471,7 @@ export default function CampaignsPage() {
             concept:    modal.campaign.concept ?? "",
             budget:     modal.campaign.budget ?? 0,
             targetGmv:  modal.campaign.targetGmv ?? 0,
+            kpiTargets: modal.kpiTargets
           }}
           onClose={() => setModal(null)}
           onSave={handleEdit}
