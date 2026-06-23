@@ -16,9 +16,7 @@ import type { Campaign, ReportEntry, ContentItem, Booking } from "@/types";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { ActivityFeed } from "@/components/ui/ActivityFeed";
 import { isWithinInterval, startOfWeek, endOfWeek, parseISO } from "date-fns";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
-} from "recharts";
+
 
 export default function DashboardPage() {
   const { teamMap } = useSystem();
@@ -93,7 +91,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50">
+    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
       {/* ── Header ── */}
       <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm sticky top-0 z-10">
         <div>
@@ -143,28 +141,38 @@ export default function DashboardPage() {
               if (!team) return null;
 
               // 1. Reports/KPI calculations
-              const teamReports = allReports.filter(r => r.teamId === teamId && r.period.type === "campaign");
-              const totalTarget = teamReports.reduce((s, r) => s + r.target, 0);
-              const totalActual = teamReports.reduce((s, r) => s + r.actual, 0);
-              const progressPct = totalTarget > 0 ? Math.min(100, Math.round((totalActual / totalTarget) * 100)) : 0;
+              const teamKpiFields = TEAM_KPI_FIELDS[teamId] ?? [];
+              const validMetricIds = new Set(teamKpiFields.map(f => f.id));
+              const teamReports = allReports.filter(r => r.teamId === teamId && r.period.type === "campaign" && validMetricIds.has(r.metricId));
+              const metricProgress: number[] = [];
 
               // Recharts Data preparation
               // Aggregate by metricId
               const metricMap: Record<string, { target: number; actual: number }> = {};
               teamReports.forEach(r => {
                 if (!metricMap[r.metricId]) metricMap[r.metricId] = { target: 0, actual: 0 };
-                metricMap[r.metricId].target += r.target;
-                metricMap[r.metricId].actual += r.actual;
+                metricMap[r.metricId].target += (Number(r.target) || 0);
+                metricMap[r.metricId].actual += (Number(r.actual) || 0);
               });
-              const teamKpiFields = TEAM_KPI_FIELDS[teamId] ?? [];
               const chartData = Object.keys(metricMap).map(key => {
                 const fieldDef = teamKpiFields.find(f => f.id === key);
+                const t = metricMap[key].target;
+                const a = metricMap[key].actual;
+                const rawPct = t > 0 ? (a / t) * 100 : (a > 0 ? 100 : 0);
+                metricProgress.push(rawPct);
                 return {
                   name: fieldDef?.label ?? key.replace(/_/g, ' '),
-                  Target: metricMap[key].target,
-                  Actual: metricMap[key].actual,
+                  unit: fieldDef?.unit ?? '',
+                  TargetRaw: t,
+                  ActualRaw: a,
+                  "Hoàn thành (%)": Math.min(100, Math.round(rawPct)),
+                  pctDisplay: Math.round(rawPct)
                 };
               });
+
+              const progressPct = metricProgress.length > 0 
+                ? Math.min(100, Math.round(metricProgress.reduce((s, p) => s + p, 0) / metricProgress.length))
+                : 0;
 
               // 2. Contents calculations (This Week)
               const teamContents = allContents.filter(c => c.teamId === teamId);
@@ -207,22 +215,30 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Chart */}
+                    {/* Detailed Metrics */}
                     {chartData.length > 0 ? (
-                      <div className="h-32 w-full mt-2">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                            <Tooltip
-                              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }}
-                              cursor={{ fill: '#F1F5F9' }}
-                            />
-                            <Bar dataKey="Target" fill="#CBD5E1" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                            <Bar dataKey="Actual" fill={team.color} radius={[4, 4, 0, 0]} maxBarSize={30} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                      <div className="h-32 w-full mt-2 overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-slate-200">
+                        {chartData.map((data, idx) => (
+                          <div key={idx}>
+                            <div className="flex justify-between items-end mb-1.5">
+                              <span className="text-[11px] font-bold text-slate-600 truncate pr-2">{data.name}</span>
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <span className="text-[10px] font-medium text-slate-400">
+                                  {data.ActualRaw.toLocaleString()} / {data.TargetRaw.toLocaleString()} {data.unit}
+                                </span>
+                                <span className="text-[11px] font-black" style={{ color: team.color }}>
+                                  {data.pctDisplay}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${data["Hoàn thành (%)"]}%`, backgroundColor: team.color }}
+                              />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <div className="h-32 w-full mt-2 flex items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200">

@@ -107,8 +107,9 @@ export function ActivityFeed({ campaignId }: { campaignId: string | null }) {
         {filteredLogs.length === 0 ? (
           <div className="text-center text-xs text-slate-400 mt-10">Chưa có hoạt động nào.</div>
         ) : (
-          filteredLogs.map(log => {
-            const team = teamMap[log.teamId];
+          <>
+            {filteredLogs.map(log => {
+              const team = teamMap[log.teamId];
             return (
               <div key={log.id} className="flex gap-3 items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {/* Avatar / Icon */}
@@ -140,7 +141,9 @@ export function ActivityFeed({ campaignId }: { campaignId: string | null }) {
                 </div>
               </div>
             );
-          })
+            })}
+
+          </>
         )}
       </div>
     </div>
