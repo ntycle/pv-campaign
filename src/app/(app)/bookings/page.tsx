@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
-import { BRAND, STATUS_CONFIG } from "@/lib/constants";
+import { BRAND, STATUS_CONFIG, TEAM_KPI_FIELDS } from "@/lib/constants";
 import { subscribeAllBookings, subscribeCampaigns, upsertBooking, deleteBooking } from "@/lib/firestore";
 import { useSystem } from "@/hooks/useSystem";
 import { TeamBadge } from "@/components/ui/TeamBadge";
@@ -22,7 +22,7 @@ function BookingModal({
     resourceType: "design_slot",
     teams: [], dates: [selectedDate],
     status: "pending", priority: "medium",
-    description: "", updatedBy: user,
+    description: "", updatedBy: user, kpiMetricId: "",
     ...(item ? { ...item } : {}),
   });
 
@@ -32,6 +32,9 @@ function BookingModal({
 
   const toggleTeam = (tid: TeamId) =>
     setForm(p => ({ ...p, teams: p.teams.includes(tid) ? p.teams.filter(t=>t!==tid) : [...p.teams, tid] }));
+
+  const currentResource = resources.find(r => r.id === form.resourceType);
+  const kpiOptions = currentResource ? (TEAM_KPI_FIELDS[currentResource.teamId] || []) : [];
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -66,6 +69,15 @@ function BookingModal({
                 {["critical","high","medium","low"].map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}
               </select>
             </div>
+            {kpiOptions.length > 0 && (
+              <div className="col-span-2">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Phục vụ KPI (Tự động cộng Actual)</label>
+                <select className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none" value={form.kpiMetricId || ""} onChange={e => setForm(p=>({...p,kpiMetricId:e.target.value}))}>
+                  <option value="">-- Không liên kết KPI --</option>
+                  {kpiOptions.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           <div>
@@ -210,7 +222,14 @@ export default function BookingsPage() {
                       <td className="px-4 py-2.5">
                         {cp && <span className="text-xs font-bold px-2 py-0.5 rounded-full border" style={{ color: cp.color, background: cp.color+"18", borderColor: cp.color+"40" }}>{cp.name}</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-xs font-semibold flex items-center gap-2">{rt?.icon} {rt?.label}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="text-xs font-semibold flex items-center gap-2">{rt?.icon} {rt?.label}</div>
+                        {b.kpiMetricId && rt && (
+                          <div className="mt-1 text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded inline-block">
+                            KPI: {TEAM_KPI_FIELDS[rt.teamId]?.find(k => k.id === b.kpiMetricId)?.label || b.kpiMetricId}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5">
                         <div className="flex gap-1 flex-wrap">
                           {b.teams.map(tid => <TeamBadge key={tid} teamId={tid} />)}

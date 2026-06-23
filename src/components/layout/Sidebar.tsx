@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { BRAND } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+export const NAV = [
   { href: "/dashboard",          icon: "⚡", label: "Dashboard"           },
   { href: "/campaigns",          icon: "🏆", label: "Campaigns"           },
   { href: "/calendar",           icon: "📅", label: "Lịch Tuần"           },
@@ -14,11 +14,18 @@ const NAV = [
   { href: "/bookings/settings",  icon: "⚙️", label: "Thiết Lập Tài Nguyên"},
   { href: "/kpis",               icon: "📊", label: "KPI Teams"           },
   { href: "/conflicts",          icon: "⚠️", label: "Conflict Check"      },
+  { href: "/users",              icon: "👥", label: "Quản lý Users"       },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user, userProfile, signOut } = useAuth();
+
+  const allowedTabs = userProfile?.allowedTabs || [];
+  const filteredNav = NAV.filter(item => {
+    if (userProfile?.role === "campaign_lead") return true; // Admin luôn thấy tất cả
+    return allowedTabs.includes(item.href);
+  });
 
   return (
     <aside
@@ -41,7 +48,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 py-4 overflow-y-auto">
-        {NAV.map(item => {
+        {filteredNav.map(item => {
           const active =
             item.href === "/bookings"
               ? pathname === "/bookings"

@@ -6,8 +6,9 @@ import {
   signInWithPopup,
   signOut as firebaseSignOut,
 } from "firebase/auth";
-import { auth, googleProvider } from "@/lib/firebase";
+import { auth, googleProvider, db } from "@/lib/firebase";
 import { getUserProfile, upsertUserProfile } from "@/lib/firestore";
+import { doc, onSnapshot, type Unsubscribe } from "firebase/firestore";
 import type { AppUser, UserProfile, TeamId } from "@/types";
 
 interface AuthCtx {
@@ -32,6 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!auth) return;
+    let profileUnsub: Unsubscribe | undefined;
+
     const unsub = onAuthStateChanged(auth, async fbUser => {
       if (fbUser) {
         const appUser: AppUser = {
@@ -42,30 +45,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         setUser(appUser);
 
-        // Load UserProfile from Firestore
-        const profile = await getUserProfile(fbUser.uid);
-        if (profile) {
-          setUserProfile(profile);
-        } else {
-          // First login: create a default profile (teamId = null → triggers TeamSetupModal)
-          const newProfile: UserProfile = {
-            uid:         fbUser.uid,
-            displayName: fbUser.displayName,
-            email:       fbUser.email,
-            photoURL:    fbUser.photoURL,
-            teamId:      null,
-            role:        "team_member",
-          };
-          await upsertUserProfile(newProfile);
-          setUserProfile(newProfile);
-        }
+        // Listen to profile changes
+        profileUnsub = onSnapshot(doc(db, "users", fbUser.uid), async (snap) => {
+          if (snap.exists()) {
+            setUserProfile(snap.data() as UserProfile);
+          } else {
+            // First login: create a default profile (teamId = null → triggers TeamSetupModal)
+            const newProfile: UserProfile = {
+              uid:         fbUser.uid,
+              displayName: fbUser.displayName,
+              email:       fbUser.email,
+              photoURL:    fbUser.photoURL,
+              teamId:      null,
+              role:        "team_member",
+              allowedTabs: [],
+            };
+            await upsertUserProfile(newProfile);
+            setUserProfile(newProfile);
+          }
+          setLoading(false);
+        });
       } else {
         setUser(null);
         setUserProfile(null);
+        if (profileUnsub) profileUnsub();
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return unsub;
+    return () => {
+      unsub();
+      if (profileUnsub) profileUnsub();
+    };
   }, []);
 
   const signInWithGoogle = async () => {

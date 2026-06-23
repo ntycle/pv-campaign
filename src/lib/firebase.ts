@@ -43,4 +43,5 @@ export const COLLECTIONS = {
   resource_quotas: "resource_quotas",
   teams: "teams",
   resources: "resources",
+  activity_logs: "activity_logs",
 } as const;

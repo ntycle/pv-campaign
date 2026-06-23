@@ -110,14 +110,8 @@ function TabPlan({
   canEditPlan: boolean;
 }) {
   const { teams } = useSystem();
-  const [periodType, setPeriodType]   = useState<PeriodType>("campaign");
-  const [periodValue, setPeriodValue] = useState(0);
-
-  const periodOptions =
-    periodType === "campaign" ? [{ label: "Tổng Campaign", value: 0 }] :
-    periodType === "week"    ? WEEKS.map((w,i) => ({ label: w, value: i })) :
-    periodType === "month"   ? MONTHS.map((m,i) => ({ label: m, value: i+1 })) :
-    QUARTERS.map((q,i) => ({ label: q, value: i+1 }));
+  const periodType: PeriodType = "campaign";
+  const periodValue = 0;
 
   const getEntry = (teamId: TeamId, metricId: string) =>
     reports.find(r =>
@@ -150,30 +144,7 @@ function TabPlan({
         </div>
       )}
 
-      {/* Period selector */}
-      <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-wrap gap-3 items-center">
-        <div className="flex rounded-lg overflow-hidden border border-slate-200">
-          {(["week","month","quarter", "campaign"] as PeriodType[]).map(pt => (
-            <button key={pt}
-              onClick={() => { setPeriodType(pt); setPeriodValue(pt === "week" || pt === "campaign" ? 0 : 1); }}
-              className="px-3 py-1.5 text-xs font-bold transition-colors"
-              style={periodType === pt
-                ? { background: BRAND.navy, color: "#fff" }
-                : { background: "#F9FAFB", color: "#374151" }
-              }
-            >
-              {PERIOD_LABELS[pt]}
-            </button>
-          ))}
-        </div>
-        <select
-          className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none"
-          value={periodValue}
-          onChange={e => setPeriodValue(+e.target.value)}
-        >
-          {periodOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
+
 
       {/* Target assignment table */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
@@ -231,14 +202,8 @@ function TabPlan({
 // ── Tab Report ────────────────────────────────────────────
 function TabReport({ campaign, reports }: { campaign: Campaign; reports: ReportEntry[] }) {
   const { teams } = useSystem();
-  const [periodType, setPeriodType] = useState<PeriodType>("campaign");
-  const [periodValue, setPeriodValue] = useState(0);
-
-  const periodOptions =
-    periodType === "campaign" ? [{ label: "Tổng Campaign", value: 0 }] :
-    periodType === "week"  ? WEEKS.map((w,i) => ({ label: w, value: i })) :
-    periodType === "month" ? MONTHS.map((m,i) => ({ label: m, value: i+1 })) :
-    QUARTERS.map((q,i) => ({ label: q, value: i+1 }));
+  const periodType: PeriodType = "campaign";
+  const periodValue = 0;
 
   const filtered = reports.filter(r =>
     r.period.type === periodType && r.period.value === periodValue
@@ -257,30 +222,7 @@ function TabReport({ campaign, reports }: { campaign: Campaign; reports: ReportE
 
   return (
     <div className="p-6 space-y-4">
-      {/* Period selector */}
-      <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-wrap gap-3 items-center">
-        <div className="flex rounded-lg overflow-hidden border border-slate-200">
-          {(["week","month","quarter", "campaign"] as PeriodType[]).map(pt => (
-            <button key={pt}
-              onClick={() => { setPeriodType(pt); setPeriodValue(pt === "week" || pt === "campaign" ? 0 : 1); }}
-              className="px-3 py-1.5 text-xs font-bold transition-colors"
-              style={periodType === pt
-                ? { background: BRAND.navy, color: "#fff" }
-                : { background: "#F9FAFB", color: "#374151" }
-              }
-            >
-              {PERIOD_LABELS[pt]}
-            </button>
-          ))}
-        </div>
-        <select
-          className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none"
-          value={periodValue}
-          onChange={e => setPeriodValue(+e.target.value)}
-        >
-          {periodOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
+
 
       {/* Team summary rings */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">

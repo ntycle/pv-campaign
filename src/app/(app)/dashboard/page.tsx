@@ -1,413 +1,265 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { subscribeCampaigns, subscribeReports } from "@/lib/firestore";
-import { BRAND } from "@/lib/constants";
+import {
+  subscribeCampaigns,
+  subscribeReports,
+  subscribeContentItems,
+  subscribeCampaignBookings
+} from "@/lib/firestore";
 import { formatCurrency } from "@/lib/utils";
+import { TEAM_KPI_FIELDS } from "@/lib/constants";
 import { CampaignStatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSystem } from "@/hooks/useSystem";
-import type { Campaign, ReportEntry, TeamId } from "@/types";
+import type { Campaign, ReportEntry, ContentItem, Booking } from "@/types";
+import { TeamBadge } from "@/components/ui/TeamBadge";
+import { ActivityFeed } from "@/components/ui/ActivityFeed";
+import { isWithinInterval, startOfWeek, endOfWeek, parseISO } from "date-fns";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+} from "recharts";
 
-// ── Team workflow steps ────────────────────────────────────
-const TEAM_STEPS: Record<string, { phase: string; steps: string[] }[]> = {
-  campaign: [
-    { phase: "Pha 1 – Lập Plan", steps: [
-      "Tạo Campaign mới với concept & timeline",
-      "Phân bổ budget và target GMV",
-      "Assign teams tham gia",
-      "Vào tab 'Giao Plan' → nhập target cho từng team",
-      "Publish kế hoạch cho các team",
-    ]},
-    { phase: "Pha 3 – Theo dõi", steps: [
-      "Xem tab Report → kiểm tra tiến độ",
-      "Đánh giá traffic light từng team",
-      "Tối ưu ngân sách nếu cần",
-    ]},
-  ],
-  social: [
-    { phase: "Pha 2 – Kế hoạch", steps: [
-      "Vào Campaign → Social Workspace",
-      "Điền booking bài theo tuần/tháng/quý",
-      "Phân bổ bài vào các campaign tương ứng",
-    ]},
-    { phase: "Pha 2 – Thực thi", steps: [
-      "Sản xuất nội dung theo lịch",
-      "Đăng bài đúng kế hoạch",
-      "Update actual: Số bài, engagement, reach",
-    ]},
-  ],
-  media: [
-    { phase: "Pha 2 – Kế hoạch", steps: [
-      "Vào Campaign → Media Workspace",
-      "Booking clip TikTok/YouTube theo tuần/tháng/quý",
-      "Phân bổ vào campaign tương ứng",
-    ]},
-    { phase: "Pha 2 – Thực thi", steps: [
-      "Sản xuất video theo lịch",
-      "Đăng tải lên TikTok/YouTube",
-      "Update actual: Số clip, views",
-    ]},
-  ],
-  design: [
-    { phase: "Pha 2 – Kế hoạch", steps: [
-      "Vào Campaign → Design Workspace",
-      "Nhập slot design theo tuần",
-      "Kiểm soát số lượng tác vụ/tuần",
-    ]},
-    { phase: "Pha 2 – Thực thi", steps: [
-      "Nhận brief từ các team",
-      "Thiết kế assets theo kế hoạch",
-      "Update actual: Số assets hoàn thành",
-    ]},
-  ],
-  onsite: [
-    { phase: "Pha 2 – Kế hoạch", steps: [
-      "Vào Campaign → Onsite Workspace",
-      "Lên kế hoạch banner web/app",
-    ]},
-    { phase: "Pha 2 – Thực thi", steps: [
-      "Air banner theo lịch campaign",
-      "Theo dõi CTR và traffic",
-      "Update actual: Clicks, traffic, CTR",
-    ]},
-  ],
-  seo: [
-    { phase: "Pha 2 – Kế hoạch", steps: [
-      "Vào Campaign → SEO Workspace",
-      "Target keywords và traffic",
-    ]},
-    { phase: "Pha 2 – Thực thi", steps: [
-      "Tối ưu trang category/SKU",
-      "Publish article SEO",
-      "Update actual: Organic sessions",
-    ]},
-  ],
-  digital: [
-    { phase: "Pha 2 – Kế hoạch", steps: [
-      "Vào Campaign → Digital Workspace",
-      "Lên kế hoạch campaign GG & Meta",
-      "Phân bổ budget quảng cáo",
-    ]},
-    { phase: "Pha 2 – Thực thi", steps: [
-      "Setup campaign ads",
-      "Monitor performance hàng ngày",
-      "Update actual: Spend, traffic, GMV",
-    ]},
-  ],
-};
-
-// ── Flow Node ──────────────────────────────────────────────
-function FlowNode({
-  teamId, label, icon, color, pct, isActive, onClick,
-}: {
-  teamId: string; label: string; icon: string; color: string;
-  pct: number; isActive: boolean; onClick: () => void;
-}) {
-  const borderColor = pct >= 90 ? "#10B981" : pct >= 60 ? "#F59E0B" : pct > 0 ? "#EF4444" : "#E5E7EB";
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center gap-1.5 group cursor-pointer"
-    >
-      <div
-        className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl shadow-sm transition-all group-hover:scale-105 group-hover:shadow-md border-2"
-        style={{
-          background: isActive ? color : color + "18",
-          borderColor: isActive ? color : borderColor,
-          boxShadow: isActive ? `0 0 0 4px ${color}30` : undefined,
-        }}
-      >
-        {icon}
-      </div>
-      <span className="text-[10px] font-black text-slate-600">{label}</span>
-      {pct > 0 && (
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-          style={{ background: borderColor + "20", color: borderColor }}>
-          {pct}%
-        </span>
-      )}
-    </button>
-  );
-}
-
-// ── Arrow connector ────────────────────────────────────────
-function Arrow({ vertical = false }: { vertical?: boolean }) {
-  return (
-    <div className={`flex items-center justify-center ${vertical ? "py-1" : "px-1"}`}>
-      <div className="text-slate-300 text-lg">{vertical ? "↓" : "→"}</div>
-    </div>
-  );
-}
-
-// ── Step Panel (slide-in sidebar) ─────────────────────────
-function StepPanel({ teamId, onClose }: { teamId: string; onClose: () => void }) {
-  const { teamMap } = useSystem();
-  const team = teamMap[teamId];
-  const steps = TEAM_STEPS[teamId] ?? [];
-  if (!team) return null;
-
-  return (
-    <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-50 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-4 flex items-center justify-between"
-        style={{ background: team.color }}>
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">{team.icon}</span>
-          <div>
-            <div className="font-black text-white text-sm">{team.label}</div>
-            <div className="text-xs text-white/70">{team.sublabel}</div>
-          </div>
-        </div>
-        <button onClick={onClose} className="text-white/70 hover:text-white text-xl">✕</button>
-      </div>
-
-      {/* Steps */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
-        {steps.map((phase, pi) => (
-          <div key={pi}>
-            <div className="text-[10px] font-black uppercase tracking-widest mb-2"
-              style={{ color: team.color }}>{phase.phase}</div>
-            <div className="space-y-2">
-              {phase.steps.map((step, si) => (
-                <div key={si} className="flex items-start gap-2">
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white flex-shrink-0 mt-0.5"
-                    style={{ background: team.color }}>
-                    {si + 1}
-                  </div>
-                  <span className="text-xs text-slate-600 leading-relaxed">{step}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="p-4 border-t border-slate-100">
-        <p className="text-[10px] text-slate-400 text-center">
-          Bấm vào campaign bên dưới để vào workspace
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ── Main Dashboard ────────────────────────────────────────
 export default function DashboardPage() {
-  const { userProfile } = useAuth();
-  const { teams, teamMap } = useSystem();
-  const [campaigns, setCampaigns]       = useState<Campaign[]>([]);
-  const [allReports, setAllReports]     = useState<ReportEntry[]>([]);
+  const { teamMap } = useSystem();
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [allReports, setAllReports] = useState<ReportEntry[]>([]);
+  const [allContents, setAllContents] = useState<ContentItem[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
+
   const [activeCampaignId, setActiveCamp] = useState<string | null>(null);
-  const [activeNode, setActiveNode]     = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => subscribeCampaigns(setCampaigns), []);
+  // Load basic data
+  useEffect(() => subscribeCampaigns((d) => { setCampaigns(d); setLoading(false); }), []);
 
-  // Subscribe reports for active campaign
+  // Filter valid campaigns for dropdown (running / planning)
+  const validCampaigns = useMemo(() => {
+    return campaigns.filter(c => c.status === "running" || c.status === "planning");
+  }, [campaigns]);
+
+  // Set default active campaign
+  useEffect(() => {
+    if (validCampaigns.length && !activeCampaignId) {
+      setActiveCamp(validCampaigns[0].id);
+    }
+  }, [validCampaigns, activeCampaignId]);
+
+  // Subscriptions for active campaign
   useEffect(() => {
     if (!activeCampaignId) return;
-    return subscribeReports(activeCampaignId, setAllReports);
+    const unsubReports = subscribeReports(activeCampaignId, setAllReports);
+    const unsubBookings = subscribeCampaignBookings(activeCampaignId, setAllBookings);
+    const unsubContents = subscribeContentItems(activeCampaignId, null, setAllContents);
+    return () => {
+      unsubReports();
+      unsubBookings();
+      unsubContents();
+    };
   }, [activeCampaignId]);
-
-  // Set first running campaign as default
-  useEffect(() => {
-    if (campaigns.length && !activeCampaignId) {
-      const running = campaigns.find(c => c.status === "running") ?? campaigns[0];
-      if (running) setActiveCamp(running.id);
-    }
-  }, [campaigns]);
 
   const activeCampaign = campaigns.find(c => c.id === activeCampaignId);
 
-  // Compute team % completion
-  const teamPct = (tid: TeamId) => {
-    const entries = allReports.filter(r => r.teamId === tid);
-    const t = entries.reduce((s, e) => s + e.target, 0);
-    const a = entries.reduce((s, e) => s + e.actual, 0);
-    return t > 0 ? Math.round(a / t * 100) : 0;
-  };
+  // Current week interval
+  const { thisWeekStart, thisWeekEnd } = useMemo(() => ({
+    thisWeekStart: startOfWeek(new Date(), { weekStartsOn: 1 }),
+    thisWeekEnd: endOfWeek(new Date(), { weekStartsOn: 1 }),
+  }), []);
 
-  // Hero stats
-  const running = campaigns.filter(c => c.status === "running").length;
-  const totalBudget = campaigns.reduce((s, c) => s + (c.budget ?? 0), 0);
-  const totalGmv    = campaigns.reduce((s, c) => s + (c.targetGmv ?? 0), 0);
+  // Teams to display: Teams that are part of the campaign, excluding the "campaign" pseudo-team
+  const participatingTeams = useMemo(() => {
+    if (!activeCampaign) return [];
+    return activeCampaign.teams.filter(tid => tid !== "campaign");
+  }, [activeCampaign]);
 
-  const TEAM_NODES = teams.filter(t => t.id !== "campaign").map(t => t.id);
+  if (loading) {
+    return (
+      <div className="flex-1 p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="bg-white rounded-2xl h-64 animate-pulse border border-slate-100" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeCampaign) {
+    return (
+      <div className="flex-1 p-6 flex flex-col items-center justify-center text-slate-400">
+        <p>Không có campaign nào đang chạy hoặc planning.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 bg-white">
-        <h1 className="text-lg font-black text-slate-800">🏠 Dashboard</h1>
-        <p className="text-xs text-slate-400 mt-0.5">
-          Xin chào {userProfile?.displayName} ·{" "}
-          {userProfile?.teamId ? teamMap[userProfile.teamId]?.label : "Chưa chọn team"}
-        </p>
+      {/* ── Header ── */}
+      <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm sticky top-0 z-10">
+        <div>
+          <h1 className="text-xl font-black text-slate-800">⚔️ War Room Dashboard</h1>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Cross-team overview & performance tracking
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <select
+            className="text-sm px-4 py-2 border border-slate-200 rounded-xl font-bold bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+            value={activeCampaignId ?? ""}
+            onChange={e => setActiveCamp(e.target.value)}
+          >
+            {validCampaigns.map(c => (
+              <option key={c.id} value={c.id}>🚀 {c.name}</option>
+            ))}
+          </select>
+          <CampaignStatusBadge status={activeCampaign.status} />
+        </div>
       </div>
 
-      <div className="flex-1 p-6 space-y-6">
-        {/* ── Hero Stats ── */}
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: "Campaigns đang chạy", value: running,                  icon: "🚀", color: "#3B82F6" },
-            { label: "Tổng Budget",         value: formatCurrency(totalBudget), icon: "💰", color: "#F59E0B" },
-            { label: "Target GMV",          value: formatCurrency(totalGmv),    icon: "🎯", color: "#10B981" },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                style={{ background: s.color + "18" }}>
-                {s.icon}
-              </div>
-              <div>
-                <div className="text-xl font-black text-slate-800">{s.value}</div>
-                <div className="text-xs text-slate-400">{s.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Interactive Flow Diagram ── */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 p-6 overflow-y-auto">
+          {/* ── Campaign Hero ── */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
             <div>
-              <h2 className="text-sm font-black text-slate-800">🗺️ User Flow — Quy trình 3 Pha</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Click vào từng node để xem chi tiết bước công việc</p>
+              <h2 className="text-2xl font-black text-blue-900">{activeCampaign.name}</h2>
+              <p className="text-sm text-blue-600/80 font-medium mt-1">{activeCampaign.concept}</p>
             </div>
-            {/* Campaign selector */}
-            {campaigns.length > 0 && (
-              <select
-                className="text-xs px-3 py-1.5 border border-slate-200 rounded-lg font-semibold focus:outline-none"
-                value={activeCampaignId ?? ""}
-                onChange={e => setActiveCamp(e.target.value)}
-              >
-                {campaigns.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Flow diagram */}
-          <div className="flex items-center justify-center gap-0 overflow-x-auto pb-2">
-            {/* Pha 1: Campaign */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Pha 1</div>
-              <FlowNode
-                teamId="campaign" label="Campaign" icon="🏆"
-                color={teamMap["campaign"]?.color || "#6366F1"}
-                pct={0}
-                isActive={activeNode === "campaign"}
-                onClick={() => setActiveNode(activeNode === "campaign" ? null : "campaign")}
-              />
-              <div className="text-[9px] text-slate-400 mt-1 text-center max-w-[70px] leading-tight">
-                Lập plan<br/>Giao KPI
+            <div className="flex gap-8">
+              <div className="text-right">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Budget</div>
+                <div className="text-xl font-black text-slate-800">{formatCurrency(activeCampaign.budget)}</div>
               </div>
-            </div>
-
-            {/* Arrow */}
-            <Arrow />
-
-            {/* Pha 2: 6 teams */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Pha 2 — Song song</div>
-              <div className="grid grid-cols-3 gap-x-3 gap-y-2">
-                {TEAM_NODES.map(tid => {
-                  const team = teamMap[tid];
-                  if (!team) return null;
-                  const pct  = teamPct(tid);
-                  return (
-                    <FlowNode
-                      key={tid}
-                      teamId={tid} label={team.label} icon={team.icon}
-                      color={team.color} pct={pct}
-                      isActive={activeNode === tid}
-                      onClick={() => setActiveNode(activeNode === tid ? null : tid)}
-                    />
-                  );
-                })}
+              <div className="text-right">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Target GMV</div>
+                <div className="text-xl font-black text-emerald-600">{formatCurrency(activeCampaign.targetGmv)}</div>
               </div>
-            </div>
-
-            {/* Arrow */}
-            <Arrow />
-
-            {/* Pha 3: Report */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Pha 3</div>
-              <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl border-2 border-emerald-300 shadow-sm"
-                style={{ background: "#D1FAE5" }}
-              >
-                📊
-              </div>
-              <span className="text-[10px] font-black text-slate-600">Report</span>
-              {activeCampaign && (
-                <Link
-                  href={`/campaigns/${activeCampaignId}`}
-                  className="text-[9px] text-emerald-600 font-bold underline mt-0.5"
-                >
-                  Xem →
-                </Link>
-              )}
             </div>
           </div>
 
-          {/* Phase labels below */}
-          <div className="mt-4 flex justify-center gap-6">
-            {[
-              { color: "#6366F1", label: "1. Campaign lập & giao plan" },
-              { color: "#3B82F6", label: "2. Các team điền kế hoạch & thực thi" },
-              { color: "#10B981", label: "3. Đổ chỉ số về Report chung" },
-            ].map(p => (
-              <div key={p.label} className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />
-                <span className="text-[10px] text-slate-500 font-semibold">{p.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+          {/* ── War Room Grid ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {participatingTeams.map(teamId => {
+              const team = teamMap[teamId];
+              if (!team) return null;
 
-        {/* ── Campaign Progress Cards ── */}
-        <div>
-          <h2 className="text-sm font-black text-slate-700 mb-3">📋 Tất cả Campaigns</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {campaigns.map(cp => (
-              <Link
-                key={cp.id}
-                href={`/campaigns/${cp.id}`}
-                className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow p-4 flex gap-3"
-              >
-                <div className="w-1.5 rounded-full flex-shrink-0 self-stretch" style={{ background: cp.color }} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-black text-sm text-slate-800 truncate">{cp.name}</span>
-                    <CampaignStatusBadge status={cp.status} />
+              // 1. Reports/KPI calculations
+              const teamReports = allReports.filter(r => r.teamId === teamId && r.period.type === "campaign");
+              const totalTarget = teamReports.reduce((s, r) => s + r.target, 0);
+              const totalActual = teamReports.reduce((s, r) => s + r.actual, 0);
+              const progressPct = totalTarget > 0 ? Math.min(100, Math.round((totalActual / totalTarget) * 100)) : 0;
+
+              // Recharts Data preparation
+              // Aggregate by metricId
+              const metricMap: Record<string, { target: number; actual: number }> = {};
+              teamReports.forEach(r => {
+                if (!metricMap[r.metricId]) metricMap[r.metricId] = { target: 0, actual: 0 };
+                metricMap[r.metricId].target += r.target;
+                metricMap[r.metricId].actual += r.actual;
+              });
+              const teamKpiFields = TEAM_KPI_FIELDS[teamId] ?? [];
+              const chartData = Object.keys(metricMap).map(key => {
+                const fieldDef = teamKpiFields.find(f => f.id === key);
+                return {
+                  name: fieldDef?.label ?? key.replace(/_/g, ' '),
+                  Target: metricMap[key].target,
+                  Actual: metricMap[key].actual,
+                };
+              });
+
+              // 2. Contents calculations (This Week)
+              const teamContents = allContents.filter(c => c.teamId === teamId);
+              const thisWeekContents = teamContents.filter(c => {
+                try {
+                  const d = parseISO(c.date);
+                  return isWithinInterval(d, { start: thisWeekStart, end: thisWeekEnd });
+                } catch {
+                  return false;
+                }
+              });
+              const pendingContents = thisWeekContents.filter(c => c.status === "pending" || c.status === "approved").length;
+              const doneContents = thisWeekContents.filter(c => c.status === "done" || c.status === "running").length;
+
+              // 3. Bookings calculations (Active/Pending)
+              const teamBookings = allBookings.filter(b => b.teams.includes(teamId));
+              const activeBookings = teamBookings.filter(b => b.status === "running" || b.status === "approved").length;
+
+              return (
+                <div key={teamId} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all flex flex-col">
+                  <div className="p-4 border-b border-slate-50 flex items-center justify-between" style={{ backgroundColor: team.color + '10' }}>
+                    <TeamBadge teamId={teamId} />
+                    <span className="text-xs font-bold px-2 py-1 rounded-full bg-white text-slate-500 shadow-sm">
+                      KPI: {progressPct}%
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-400 truncate mb-2">{cp.concept}</p>
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span>💰 {formatCurrency(cp.budget)}</span>
-                    <span>🎯 {formatCurrency(cp.targetGmv)}</span>
+
+                  <div className="p-5 flex-1 flex flex-col gap-5">
+                    {/* Progress Bar */}
+                    <div>
+                      <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                        <span>Overall Progress</span>
+                        <span style={{ color: team.color }}>{progressPct}%</span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${progressPct}%`, backgroundColor: team.color }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Chart */}
+                    {chartData.length > 0 ? (
+                      <div className="h-32 w-full mt-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                            <Tooltip
+                              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }}
+                              cursor={{ fill: '#F1F5F9' }}
+                            />
+                            <Bar dataKey="Target" fill="#CBD5E1" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                            <Bar dataKey="Actual" fill={team.color} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="h-32 w-full mt-2 flex items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <span className="text-xs font-medium text-slate-400">Chưa có KPI data</span>
+                      </div>
+                    )}
+
+                    {/* Micro stats */}
+                    <div className="grid grid-cols-2 gap-3 mt-auto">
+                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Content (Tuần này)</div>
+                        <div className="flex items-end gap-2">
+                          <span className="text-lg font-black text-emerald-500" title="Done">{doneContents}</span>
+                          <span className="text-xs font-bold text-slate-300 pb-1">/</span>
+                          <span className="text-lg font-black text-amber-500" title="Pending">{pendingContents}</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Active Bookings</div>
+                        <div className="text-lg font-black text-blue-500">{activeBookings}</div>
+                      </div>
+                    </div>
+                    <Link
+                      href={`/campaigns/${activeCampaignId}/team/${teamId}`}
+                      className="mt-2 w-full text-center text-xs font-bold py-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors block"
+                    >
+                      Xem Workspace →
+                    </Link>
                   </div>
                 </div>
-              </Link>
-            ))}
-            {campaigns.length === 0 && (
-              <div className="col-span-2 text-center py-10 text-slate-400 text-sm">
-                Chưa có campaign nào.{" "}
-                <Link href="/campaigns" className="text-blue-500 font-bold underline">Tạo ngay →</Link>
-              </div>
-            )}
+              );
+            })}
           </div>
         </div>
+        {/* Activity Feed Sidebar */}
+        <ActivityFeed campaignId={activeCampaignId} />
       </div>
-
-      {/* Step Panel slide-in */}
-      {activeNode && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setActiveNode(null)} />
-          <StepPanel teamId={activeNode} onClose={() => setActiveNode(null)} />
-        </>
-      )}
     </div>
   );
 }

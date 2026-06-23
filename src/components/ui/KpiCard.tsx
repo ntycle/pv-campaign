@@ -23,8 +23,11 @@ export function KpiCard({ field, target, actual, onEdit }: Props) {
       onClick={onEdit}
     >
       <div className="flex items-start justify-between mb-3">
-        <div className="text-xs font-bold text-slate-500 uppercase tracking-wide leading-tight pr-2">
+        <div className="text-xs font-bold text-slate-500 uppercase tracking-wide leading-tight pr-2 flex items-center gap-1.5">
           {field.label}
+          {field.isAutoCalculated && (
+            <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full" title="Tự động tính từ Bookings hoàn thành">AUTO</span>
+          )}
         </div>
         <span
           className="text-xs font-black px-2 py-0.5 rounded-full flex-shrink-0"

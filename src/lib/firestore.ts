@@ -6,10 +6,10 @@ import {
   onSnapshot, type Unsubscribe,
   serverTimestamp, Timestamp,
 } from "firebase/firestore";
-import { db, COLLECTIONS } from "./firebase";
+import { db, COLLECTIONS, auth } from "./firebase";
 import type {
   Campaign, ContentItem, Booking, KpiEntry, TeamId,
-  ReportEntry, TeamPlan, UserProfile, Period, ResourceQuota,
+  ReportEntry, TeamPlan, UserProfile, Period, ResourceQuota, ActivityLog
 } from "@/types";
 
 // ── RESOURCE QUOTAS ────────────────────────────────────────
@@ -40,6 +40,57 @@ function fromFirestore<T>(snap: { id: string; data(): Record<string, unknown> })
     ])
   );
   return { id: snap.id, ...converted } as T;
+}
+
+// ── ACTIVITY LOGS ──────────────────────────────────────────
+export async function logActivity(
+  campaignId: string,
+  teamId: string,
+  action: "created" | "updated" | "deleted",
+  entityType: "content" | "booking" | "kpi_report",
+  entityId: string,
+  entityTitle: string
+) {
+  const user = auth.currentUser;
+  const actorUid = user?.uid || "unknown";
+  const actorName = user?.displayName || user?.email || "Unknown User";
+
+  await addDoc(collection(db, COLLECTIONS.activity_logs), {
+    campaignId,
+    teamId,
+    actorUid,
+    actorName,
+    action,
+    entityType,
+    entityId,
+    entityTitle,
+    timestamp: new Date().toISOString()
+  });
+}
+
+export function subscribeActivityLogs(
+  campaignId: string | null,
+  cb: (data: ActivityLog[]) => void
+): Unsubscribe {
+  let q;
+  if (campaignId) {
+    q = query(
+      collection(db, COLLECTIONS.activity_logs), 
+      where("campaignId", "==", campaignId)
+    );
+  } else {
+    q = query(
+      collection(db, COLLECTIONS.activity_logs),
+      orderBy("timestamp", "desc")
+    );
+  }
+  return onSnapshot(q, snap => {
+    const data = snap.docs.map(d => fromFirestore<ActivityLog>(d));
+    if (campaignId) {
+      data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    }
+    cb(data);
+  });
 }
 
 // ── CAMPAIGNS ──────────────────────────────────────────────
@@ -147,6 +198,17 @@ export function subscribeKpis(
   return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<KpiEntry>(d))));
 }
 
+export function subscribeCampaignKpisAllWeeks(
+  campaignId: string,
+  cb: (data: KpiEntry[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, COLLECTIONS.kpis),
+    where("campaignId", "==", campaignId)
+  );
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<KpiEntry>(d))));
+}
+
 export async function upsertKpi(entry: Omit<KpiEntry, "id"> & { id?: string }): Promise<void> {
   const { id, ...rest } = entry;
   if (id) {
@@ -206,6 +268,7 @@ export async function getCampaignKPIs(campaignId: string): Promise<Record<string
 export async function upsertReport(
   entry: Omit<ReportEntry, "id"> & { id?: string }
 ): Promise<void> {
+  let docId = entry.id;
   if (entry.id) {
     const { id, ...rest } = entry;
     await updateDoc(doc(db, REPORTS, id), { ...rest, updatedAt: serverTimestamp() });
@@ -222,11 +285,22 @@ export async function upsertReport(
     const snap = await getDocs(q);
     const { id, ...rest } = entry;
     if (!snap.empty) {
+      docId = snap.docs[0].id;
       await updateDoc(snap.docs[0].ref, { ...rest, updatedAt: serverTimestamp() });
     } else {
-      await addDoc(collection(db, REPORTS), { ...rest, updatedAt: serverTimestamp() });
+      const ref = await addDoc(collection(db, REPORTS), { ...rest, updatedAt: serverTimestamp() });
+      docId = ref.id;
     }
   }
+
+  logActivity(
+    entry.campaignId,
+    entry.teamId,
+    "updated",
+    "kpi_report",
+    docId || "unknown",
+    entry.metricId
+  ).catch(console.error);
 }
 
 // ── TEAM PLANS ─────────────────────────────────────────────
@@ -267,14 +341,22 @@ const CONTENTS = "contents";
 
 export function subscribeContentItems(
   campaignId: string,
-  teamId: string,
+  teamId: string | null,
   cb: (data: ContentItem[]) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, CONTENTS),
-    where("campaignId", "==", campaignId),
-    where("teamId", "==", teamId)
-  );
+  let q;
+  if (teamId) {
+    q = query(
+      collection(db, CONTENTS),
+      where("campaignId", "==", campaignId),
+      where("teamId", "==", teamId)
+    );
+  } else {
+    q = query(
+      collection(db, CONTENTS),
+      where("campaignId", "==", campaignId)
+    );
+  }
   return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<ContentItem>(d))));
 }
 
@@ -288,12 +370,24 @@ export function subscribeAllContentItems(
 export async function upsertContentItem(
   item: Omit<ContentItem, "id"> & { id?: string }
 ): Promise<void> {
+  const actionType = item.id ? "updated" : "created";
+  let docId = item.id;
   if (item.id) {
     const { id, ...rest } = item;
     await updateDoc(doc(db, CONTENTS, id), { ...rest, updatedAt: serverTimestamp() });
   } else {
-    await addDoc(collection(db, CONTENTS), { ...item, updatedAt: serverTimestamp() });
+    const ref = await addDoc(collection(db, CONTENTS), { ...item, updatedAt: serverTimestamp() });
+    docId = ref.id;
   }
+
+  logActivity(
+    item.campaignId,
+    item.teamId,
+    actionType,
+    "content",
+    docId || "unknown",
+    item.title
+  ).catch(console.error);
 }
 
 export async function deleteContentItem(id: string): Promise<void> {
@@ -316,6 +410,14 @@ export function subscribeBookings(
   return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<Booking>(d))));
 }
 
+export function subscribeCampaignBookings(
+  campaignId: string,
+  cb: (data: Booking[]) => void
+): Unsubscribe {
+  const q = query(collection(db, BOOKINGS), where("campaignId", "==", campaignId));
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<Booking>(d))));
+}
+
 export function subscribeAllBookings(
   cb: (data: Booking[]) => void
 ): Unsubscribe {
@@ -326,12 +428,26 @@ export function subscribeAllBookings(
 export async function upsertBooking(
   booking: Omit<Booking, "id"> & { id?: string }
 ): Promise<void> {
+  const actionType = booking.id ? "updated" : "created";
+  let docId = booking.id;
   if (booking.id) {
     const { id, ...rest } = booking;
     await updateDoc(doc(db, BOOKINGS, id), { ...rest, updatedAt: serverTimestamp() });
   } else {
-    await addDoc(collection(db, BOOKINGS), { ...booking, updatedAt: serverTimestamp() });
+    const ref = await addDoc(collection(db, BOOKINGS), { ...booking, updatedAt: serverTimestamp() });
+    docId = ref.id;
   }
+
+  const teamId = booking.teams[0] || "unknown";
+
+  logActivity(
+    booking.campaignId,
+    teamId,
+    actionType,
+    "booking",
+    docId || "unknown",
+    booking.resourceType
+  ).catch(console.error);
 }
 
 export async function deleteBooking(id: string): Promise<void> {
@@ -340,6 +456,11 @@ export async function deleteBooking(id: string): Promise<void> {
 
 // ── USER PROFILES ──────────────────────────────────────────
 const USERS = "users";
+
+export function subscribeUserProfiles(cb: (data: UserProfile[]) => void): Unsubscribe {
+  const q = collection(db, USERS);
+  return onSnapshot(q, snap => cb(snap.docs.map(d => d.data() as UserProfile)));
+}
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(db, USERS, uid));

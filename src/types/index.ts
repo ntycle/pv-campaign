@@ -19,6 +19,7 @@ export interface UserProfile {
   photoURL: string | null;
   teamId: TeamId | null;   // team được assign
   role: UserRole;
+  allowedTabs?: string[];  // Danh sách các href tab được truy cập (nếu undefined là tất cả)
 }
 
 // ── KPI (legacy — giữ nguyên cho backwards compat) ─────────
@@ -27,6 +28,7 @@ export interface KpiField {
   label: string;
   unit?: string;
   type: "number" | "currency" | "percentage";
+  isAutoCalculated?: boolean;
 }
 
 export interface KpiEntry {
@@ -132,8 +134,10 @@ export interface Booking {
   status: ContentStatus;
   priority: Priority;
   description?: string;
+  kpiMetricId?: string;   // Liên kết với mục tiêu KPI nào
   completedDate?: string; // YYYY-MM-DD - actual completed date
   confirmedAt?: string;   // ISO timestamp when confirmed
+  revisionRounds?: number; // Số vòng sửa (dành riêng cho team Design)
   updatedBy?: string;
   updatedAt?: string;
 }
@@ -153,4 +157,18 @@ export interface AppUser {
   displayName: string | null;
   email: string | null;
   photoURL: string | null;
+}
+
+// ── Activity Log ─────────────────────────────────────────────
+export interface ActivityLog {
+  id: string;
+  campaignId: string;
+  teamId: string;
+  actorUid: string;
+  actorName: string;
+  action: "created" | "updated" | "deleted";
+  entityType: "content" | "booking" | "kpi_report";
+  entityId: string;
+  entityTitle: string;
+  timestamp: string; // ISO string
 }

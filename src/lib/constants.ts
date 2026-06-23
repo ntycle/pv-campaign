@@ -41,7 +41,7 @@ export const TEAM_KPI_FIELDS: Record<TeamId, KpiField[]> = {
     { id: "display_spots",  label: "Vị trí trưng bày",     type: "number" },
   ],
   media: [
-    { id: "clips_produced", label: "Sản xuất clip",         type: "number" },
+    { id: "clips_produced", label: "Sản xuất clip",         type: "number", isAutoCalculated: true },
     { id: "views",          label: "Views",                  type: "number" },
   ],
   seo: [
@@ -61,7 +61,7 @@ export const TEAM_KPI_FIELDS: Record<TeamId, KpiField[]> = {
     { id: "clicks",         label: "Click",                 type: "number" },
   ],
   design: [
-    { id: "assets_done",    label: "Assets hoàn thành",    type: "number" },
+    { id: "assets_done",    label: "Assets hoàn thành",    type: "number", isAutoCalculated: true },
     { id: "revision_rounds",label: "Số vòng revision",     type: "number" },
   ],
   trade: [
