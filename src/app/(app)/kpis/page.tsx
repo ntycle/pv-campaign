@@ -189,7 +189,7 @@ export default function KpisReportPage() {
 
   const getAggregatedActual = (teamId: TeamId, metricId: string, isAutoCalculated?: boolean) => {
     if (isAutoCalculated) {
-      return campaignBookings.filter(b => b.kpiMetricId === metricId && b.status === "done").length;
+      return campaignBookings.filter(b => b.teams?.includes(teamId) && b.status === "done").length;
     }
     const metricReports = allReports.filter(r => r.teamId === teamId && r.metricId === metricId);
     const weeklyReports = metricReports.filter(r => r.period.type === "week");
@@ -203,7 +203,15 @@ export default function KpisReportPage() {
   const chart1Data = teamFields.map(f => {
     const target = getCampaignTarget(selectedTeam, f.id);
     const actual = getAggregatedActual(selectedTeam, f.id, f.isAutoCalculated);
-    return { name: f.label, Target: target, Actual: actual };
+    const pct = target > 0 ? (actual / target) * 100 : (actual > 0 ? 100 : 0);
+    return { 
+      name: f.label, 
+      unit: f.unit ?? "",
+      TargetRaw: target, 
+      ActualRaw: actual,
+      "Hoàn thành (%)": Math.min(100, Math.round(pct)),
+      pctDisplay: Math.round(pct)
+    };
   });
 
   const chart2Data = WEEKS.map((w, idx) => {
@@ -403,11 +411,27 @@ export default function KpisReportPage() {
                   <BarChart data={chart1Data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }} cursor={{ fill: '#F8FAFC' }} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
-                    <Bar dataKey="Target" fill="#CBD5E1" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                    <Bar dataKey="Actual" fill={activeTeamObj?.color || "#3B82F6"} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} domain={[0, 100]} />
+                    <Tooltip 
+                      cursor={{ fill: '#F8FAFC' }}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white p-3 rounded-xl shadow-lg border border-slate-100">
+                              <div className="font-bold text-slate-800 mb-2">{label}</div>
+                              <div className="text-sm">
+                                <div className="text-slate-500">Target: <span className="font-bold text-slate-700">{data.TargetRaw.toLocaleString()} {data.unit}</span></div>
+                                <div className="text-slate-500">Actual: <span className="font-bold text-slate-700">{data.ActualRaw.toLocaleString()} {data.unit}</span></div>
+                                <div className="text-blue-500 font-bold mt-1">Đạt: {data.pctDisplay}%</div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar dataKey="Hoàn thành (%)" fill={activeTeamObj?.color || "#3B82F6"} radius={[4, 4, 0, 0]} maxBarSize={40} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
