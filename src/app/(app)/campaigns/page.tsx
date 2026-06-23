@@ -338,10 +338,10 @@ export default function CampaignsPage() {
   const handleOpenEdit = async (cp: Campaign) => {
     try {
       const existingKpis = await getCampaignKPIs(cp.id);
-      setModal({ type: "edit", campaign: cp, kpiTargets: existingKpis as any });
+      setModal({ type: "edit", campaign: cp, kpiTargets: existingKpis as Record<TeamId, Record<string, number>> });
     } catch (e) {
       console.error(e);
-      setModal({ type: "edit", campaign: cp, kpiTargets: {} as any });
+      setModal({ type: "edit", campaign: cp, kpiTargets: {} as Record<TeamId, Record<string, number>> });
     }
   };
 

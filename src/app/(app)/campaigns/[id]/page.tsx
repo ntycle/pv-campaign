@@ -6,14 +6,14 @@ import {
   subscribeCampaigns, subscribeReports, subscribeTeamPlans,
   upsertReport,
 } from "@/lib/firestore";
-import { BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS } from "@/lib/constants";
+import { BRAND, TEAM_KPI_FIELDS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { CampaignStatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSystem } from "@/hooks/useSystem";
-import type { Campaign, ReportEntry, TeamPlan, TeamId, Period, Team } from "@/types";
+import type { Campaign, ReportEntry, TeamPlan, TeamId } from "@/types";
 
 type Tab = "overview" | "plan" | "report";
 type PeriodType = "week" | "month" | "quarter" | "campaign";
@@ -70,7 +70,7 @@ function TabOverview({ campaign, teamPlans }: { campaign: Campaign; teamPlans: T
       {/* Team status */}
       <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm">
         <div className="text-xs font-black text-slate-500 uppercase tracking-wide mb-4">
-          Trạng thái Team ({submittedTeams.size}/{campaign.teams.length} đã submit plan)
+          Trạng thái Team ({submittedTeams.size}/{campaign.teams.filter(t => t !== "campaign").length} đã submit plan)
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {campaign.teams.map(tid => {
