@@ -314,8 +314,12 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
   useEffect(() => {
     const unsub = subscribeCampaigns(camps => {
       const found = camps.find(c => c.id === id);
-      if (found) { setCampaign(found); setLoading(false); }
-      else if (!loading) router.replace("/campaigns");
+      if (found) {
+        setCampaign(found);
+      } else if (camps.length > 0) {
+        setCampaign(null);
+      }
+      setLoading(false);
     });
     return unsub;
   }, [id]);
@@ -327,10 +331,22 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
     await upsertReport(entry);
   };
 
-  if (loading || !campaign) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="spinner" />
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!campaign) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
+        <div className="text-4xl mb-4">⚠️</div>
+        <h2 className="text-lg font-black text-slate-800 mb-2">Campaign không tồn tại hoặc đã bị xoá</h2>
+        <Link href="/campaigns" className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 mt-4">
+          ← Quay lại danh sách
+        </Link>
       </div>
     );
   }

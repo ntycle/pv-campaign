@@ -300,7 +300,6 @@ export default function CampaignsPage() {
           unit: field.unit || "",
           period: { type: "campaign", value: 0 },
           target,
-          actual: 0,
           updatedBy: user?.displayName ?? "User",
           updatedAt: new Date().toISOString()
         });
@@ -329,7 +328,6 @@ export default function CampaignsPage() {
           unit: field.unit || "",
           period: { type: "campaign", value: 0 },
           target,
-          actual: 0,
           updatedBy: user?.displayName ?? "User",
           updatedAt: new Date().toISOString()
         });

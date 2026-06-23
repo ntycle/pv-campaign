@@ -266,12 +266,14 @@ export async function getCampaignKPIs(campaignId: string): Promise<Record<string
 
 /** Upsert by (campaignId + teamId + metricId + period.type + period.value) */
 export async function upsertReport(
-  entry: Omit<ReportEntry, "id"> & { id?: string }
+  entry: Omit<ReportEntry, "id" | "actual"> & { id?: string; actual?: number }
 ): Promise<void> {
   let docId = entry.id;
   if (entry.id) {
     const { id, ...rest } = entry;
-    await updateDoc(doc(db, REPORTS, id), { ...rest, updatedAt: serverTimestamp() });
+    const payload: any = { ...rest, updatedAt: serverTimestamp() };
+    if (rest.actual === undefined) delete payload.actual;
+    await updateDoc(doc(db, REPORTS, id), payload);
   } else {
     // Try to find existing doc with same composite key
     const q = query(
@@ -286,9 +288,12 @@ export async function upsertReport(
     const { id, ...rest } = entry;
     if (!snap.empty) {
       docId = snap.docs[0].id;
-      await updateDoc(snap.docs[0].ref, { ...rest, updatedAt: serverTimestamp() });
+      const payload: any = { ...rest, updatedAt: serverTimestamp() };
+      if (rest.actual === undefined) delete payload.actual;
+      await updateDoc(snap.docs[0].ref, payload);
     } else {
-      const ref = await addDoc(collection(db, REPORTS), { ...rest, updatedAt: serverTimestamp() });
+      const payload: any = { ...rest, actual: rest.actual ?? 0, updatedAt: serverTimestamp() };
+      const ref = await addDoc(collection(db, REPORTS), payload);
       docId = ref.id;
     }
   }
