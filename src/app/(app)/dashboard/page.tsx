@@ -232,8 +232,8 @@ export default function DashboardPage() {
 
                     {/* Detailed Metrics */}
                     {chartData.length > 0 ? (
-                      <div className="h-40 w-full mt-2">
-                        <ResponsiveContainer width="100%" height="100%">
+                      <div className="h-40 w-full mt-2 min-w-[1px] min-h-[160px]">
+                        <ResponsiveContainer width="99%" height={150}>
                           <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                             <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />

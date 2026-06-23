@@ -406,8 +406,8 @@ export default function KpisReportPage() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 h-80 flex flex-col">
               <h3 className="text-sm font-black text-slate-800 mb-4">🎯 Target vs Actual ({activeTeamObj?.label})</h3>
-              <div className="flex-1">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="flex-1 w-full min-w-[1px] min-h-[250px]">
+                <ResponsiveContainer width="99%" height={260}>
                   <BarChart data={chart1Data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
@@ -450,8 +450,8 @@ export default function KpisReportPage() {
                   ))}
                 </select>
               </div>
-              <div className="flex-1">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="flex-1 w-full min-w-[1px] min-h-[250px]">
+                <ResponsiveContainer width="99%" height={260}>
                   <LineChart data={chart2Data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
@@ -464,9 +464,9 @@ export default function KpisReportPage() {
             </div>
             
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 h-96 xl:col-span-2 flex flex-col items-center">
-              <h3 className="text-sm font-black text-slate-800 mb-2 w-full text-left">🌟 Campaign Health (Avg. KPI % by Team)</h3>
-              <div className="w-full max-w-lg flex-1">
-                <ResponsiveContainer width="100%" height="100%">
+              <h3 className="text-sm font-black text-slate-800 mb-4">♥️ Sức khỏe dự án (Tất cả Team)</h3>
+              <div className="flex-1 w-full min-w-[1px] min-h-[300px]">
+                <ResponsiveContainer width="99%" height={320}>
                   <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chart3Data}>
                     <PolarGrid stroke="#E2E8F0" />
                     <PolarAngleAxis dataKey="team" tick={{ fill: '#475569', fontSize: 12, fontWeight: 'bold' }} />
