@@ -41,4 +41,6 @@ export const COLLECTIONS = {
   bookings:  "bookings",
   kpis:      "kpis",
   resource_quotas: "resource_quotas",
+  teams: "teams",
+  resources: "resources",
 } as const;

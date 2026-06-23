@@ -1,8 +1,9 @@
-import { TEAM_MAP } from "@/lib/constants";
+import { useSystem } from "@/hooks/useSystem";
 import type { TeamId } from "@/types";
 
 export function TeamBadge({ teamId }: { teamId: TeamId }) {
-  const team = TEAM_MAP[teamId];
+  const { teamMap } = useSystem();
+  const team = teamMap[teamId];
   if (!team) return null;
   return (
     <span

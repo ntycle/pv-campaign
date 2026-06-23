@@ -8,8 +8,9 @@ import {
   subscribeBookings, subscribeAllBookings, upsertBooking, deleteBooking,
   subscribeResourceQuotas
 } from "@/lib/firestore";
-import { TEAM_MAP, BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS, RESOURCE_CONFIG, CONTENT_QUOTAS } from "@/lib/constants";
+import { BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS, CONTENT_QUOTAS } from "@/lib/constants";
 import { useAuth } from "@/hooks/useAuth";
+import { useSystem } from "@/hooks/useSystem";
 import type { Campaign, ReportEntry, TeamId, Period, ContentItem, Booking, ContentType, ResourceType, Priority, ResourceQuota } from "@/types";
 
 type PeriodType = "week" | "month" | "quarter" | "campaign";
@@ -75,6 +76,7 @@ function ResourceBookingPanel({
   allBookings: Booking[]; quotas: ResourceQuota[];
   canEdit: boolean; userName: string;
 }) {
+  const { resources, resourceMap } = useSystem();
   const [resource, setResource] = useState<ResourceType>("design_slot");
   const [startDate, setStartDate] = useState<string>(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState<string>(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
@@ -85,7 +87,8 @@ function ResourceBookingPanel({
   // Calculate remaining slots for selected resource and date range
   const calculateRemainingSlots = () => {
     if (!startDate || !endDate) return null;
-    const cfg = RESOURCE_CONFIG[resource];
+    const cfg = resourceMap[resource];
+    if (!cfg) return null;
     // Find the most specific quota: week > default
     const dateRange = eachDayOfInterval({ start: new Date(startDate), end: new Date(endDate) }).map(d => format(d, "yyyy-MM-dd"));
     // Get max usage across all days in the range
@@ -129,7 +132,7 @@ function ResourceBookingPanel({
       {canEdit && (
         <div className="flex flex-col gap-2 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
           <select className="px-3 py-2 border border-slate-200 rounded text-sm w-full focus:outline-none" value={resource} onChange={e => setResource(e.target.value as ResourceType)}>
-            {Object.entries(RESOURCE_CONFIG).map(([k,v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+            {resources.map(r => <option key={r.id} value={r.id}>{r.icon} {r.label}</option>)}
           </select>
           <div className="flex gap-2">
             <input type="date" min={campaign.startDate} max={campaign.endDate} className="px-3 py-2 border border-slate-200 rounded text-sm flex-1 focus:outline-none" value={startDate} onChange={e => { setStartDate(e.target.value); if (e.target.value > endDate) setEndDate(e.target.value); }} />
@@ -166,7 +169,7 @@ function ResourceBookingPanel({
         {bookings.map(b => (
           <div key={b.id} className="flex flex-col p-3 bg-slate-50 border border-slate-100 rounded-lg text-sm">
             <div className="flex justify-between items-start mb-1">
-              <span className="font-bold text-slate-700">{RESOURCE_CONFIG[b.resourceType]?.icon} {RESOURCE_CONFIG[b.resourceType]?.label}</span>
+              <span className="font-bold text-slate-700">{resourceMap[b.resourceType]?.icon} {resourceMap[b.resourceType]?.label}</span>
               {canEdit && <button onClick={() => deleteBooking(b.id)} className="text-red-500 text-xs font-bold hover:underline">Xóa</button>}
             </div>
             <div className="text-[10px] font-black text-slate-500 mb-1">
@@ -357,7 +360,8 @@ export default function TeamWorkspacePage({
   const { id, teamId } = use(params);
   const tid = teamId as TeamId;
   const { userProfile, canEdit, user } = useAuth();
-  const team = TEAM_MAP[tid];
+  const { teamMap } = useSystem();
+  const team = teamMap[tid];
 
   const [campaign, setCampaign]   = useState<Campaign | null>(null);
   const [reports, setReports]     = useState<ReportEntry[]>([]);

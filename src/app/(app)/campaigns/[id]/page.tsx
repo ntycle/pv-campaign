@@ -6,13 +6,14 @@ import {
   subscribeCampaigns, subscribeReports, subscribeTeamPlans,
   upsertReport,
 } from "@/lib/firestore";
-import { TEAMS, TEAM_MAP, BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS } from "@/lib/constants";
+import { BRAND, WEEKS, MONTHS, QUARTERS, PERIOD_LABELS, TEAM_KPI_FIELDS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { CampaignStatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
-import type { Campaign, ReportEntry, TeamPlan, TeamId, Period } from "@/types";
+import { useSystem } from "@/hooks/useSystem";
+import type { Campaign, ReportEntry, TeamPlan, TeamId, Period, Team } from "@/types";
 
 type Tab = "overview" | "plan" | "report";
 type PeriodType = "week" | "month" | "quarter" | "campaign";
@@ -39,6 +40,7 @@ function ProgressRing({ pct, color, size = 48 }: { pct: number; color: string; s
 
 // ── Tab Overview ──────────────────────────────────────────
 function TabOverview({ campaign, teamPlans }: { campaign: Campaign; teamPlans: TeamPlan[] }) {
+  const { teams } = useSystem();
   const submittedTeams = new Set(teamPlans.map(p => p.teamId));
   return (
     <div className="p-6 space-y-6">
@@ -72,7 +74,8 @@ function TabOverview({ campaign, teamPlans }: { campaign: Campaign; teamPlans: T
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {campaign.teams.map(tid => {
-            const team = TEAM_MAP[tid];
+            const team = teams.find(t => t.id === tid);
+            if (!team) return null;
             const submitted = submittedTeams.has(tid);
             return (
               <Link
@@ -98,13 +101,16 @@ function TabOverview({ campaign, teamPlans }: { campaign: Campaign; teamPlans: T
 }
 
 // ── Tab Plan (Campaign Lead assigns targets) ──────────────
-function TabPlan({ campaign, reports, onUpdate, canEditPlan }: {
+function TabPlan({
+  campaign, reports, onUpdate, canEditPlan
+}: {
   campaign: Campaign;
   reports: ReportEntry[];
-  onUpdate: (entry: Omit<ReportEntry,"id"> & {id?:string}) => void;
+  onUpdate: (entry: Omit<ReportEntry, "id"> & { id?: string }) => void;
   canEditPlan: boolean;
 }) {
-  const [periodType, setPeriodType] = useState<PeriodType>("week");
+  const { teams } = useSystem();
+  const [periodType, setPeriodType]   = useState<PeriodType>("campaign");
   const [periodValue, setPeriodValue] = useState(0);
 
   const periodOptions =
@@ -181,7 +187,8 @@ function TabPlan({ campaign, reports, onUpdate, canEditPlan }: {
           </thead>
           <tbody>
             {campaign.teams.filter(t => t !== "campaign").flatMap((tid, ti) => {
-              const team = TEAM_MAP[tid];
+              const team = teams.find(t => t.id === tid);
+              if (!team) return [];
               const fields = TEAM_KPI_FIELDS[tid] ?? [];
               return fields.map((field, fi) => {
                 const entry = getEntry(tid, field.id);
@@ -223,7 +230,8 @@ function TabPlan({ campaign, reports, onUpdate, canEditPlan }: {
 
 // ── Tab Report ────────────────────────────────────────────
 function TabReport({ campaign, reports }: { campaign: Campaign; reports: ReportEntry[] }) {
-  const [periodType, setPeriodType] = useState<PeriodType>("week");
+  const { teams } = useSystem();
+  const [periodType, setPeriodType] = useState<PeriodType>("campaign");
   const [periodValue, setPeriodValue] = useState(0);
 
   const periodOptions =
@@ -277,7 +285,8 @@ function TabReport({ campaign, reports }: { campaign: Campaign; reports: ReportE
       {/* Team summary rings */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
         {byTeam.map(({ tid, pct }) => {
-          const team = TEAM_MAP[tid];
+          const team = teams.find(t => t.id === tid);
+          if (!team) return null;
           return (
             <div key={tid} className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm text-center">
               <div className="relative inline-flex items-center justify-center mb-1">
@@ -287,7 +296,7 @@ function TabReport({ campaign, reports }: { campaign: Campaign; reports: ReportE
                   {pct}%
                 </span>
               </div>
-              <div className="text-xs font-black text-slate-700">{team.label}</div>
+              <div className="text-xs font-black text-slate-700 truncate">{team.label}</div>
               <div className="text-sm">{trafficLight(pct)}</div>
             </div>
           );
@@ -306,7 +315,8 @@ function TabReport({ campaign, reports }: { campaign: Campaign; reports: ReportE
           </thead>
           <tbody>
             {byTeam.flatMap(({ tid, entries }, ti) => {
-              const team = TEAM_MAP[tid];
+              const team = teams.find(t => t.id === tid);
+              if (!team) return [];
               const fields = TEAM_KPI_FIELDS[tid] ?? [];
               return fields.map((field, fi) => {
                 const entry = entries.find(e => e.metricId === field.id);

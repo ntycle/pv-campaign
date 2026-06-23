@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { TEAMS, BRAND } from "@/lib/constants";
+import { BRAND } from "@/lib/constants";
 import { useAuth } from "@/hooks/useAuth";
+import { useSystem } from "@/hooks/useSystem";
 import type { TeamId, UserRole } from "@/types";
 
 const ROLES: { value: UserRole; label: string; desc: string; icon: string }[] = [
@@ -12,6 +13,7 @@ const ROLES: { value: UserRole; label: string; desc: string; icon: string }[] = 
 
 export function TeamSetupModal() {
   const { userProfile, updateProfile } = useAuth();
+  const { teams } = useSystem();
   const [selectedTeam, setSelectedTeam] = useState<TeamId | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>("team_member");
   const [saving, setSaving] = useState(false);
@@ -70,7 +72,7 @@ export function TeamSetupModal() {
                 Chọn team của bạn
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {TEAMS.filter(t => t.id !== "campaign").map(t => (
+                {teams.filter(t => t.id !== "campaign").map(t => (
                   <button
                     key={t.id}
                     onClick={() => setSelectedTeam(t.id)}

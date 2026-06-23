@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { vi } from "date-fns/locale";
 import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
-import { CONTENT_QUOTAS, TEAMS, STATUS_CONFIG, BRAND } from "@/lib/constants";
+import { CONTENT_QUOTAS, STATUS_CONFIG, BRAND } from "@/lib/constants";
 import { subscribeAllContentItems, subscribeCampaigns, upsertContentItem } from "@/lib/firestore";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";

@@ -2,10 +2,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { subscribeCampaigns, subscribeReports } from "@/lib/firestore";
-import { TEAMS, TEAM_MAP, BRAND } from "@/lib/constants";
+import { BRAND } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { CampaignStatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
+import { useSystem } from "@/hooks/useSystem";
 import type { Campaign, ReportEntry, TeamId } from "@/types";
 
 // ── Team workflow steps ────────────────────────────────────
@@ -141,7 +142,8 @@ function Arrow({ vertical = false }: { vertical?: boolean }) {
 
 // ── Step Panel (slide-in sidebar) ─────────────────────────
 function StepPanel({ teamId, onClose }: { teamId: string; onClose: () => void }) {
-  const team = TEAM_MAP[teamId as TeamId];
+  const { teamMap } = useSystem();
+  const team = teamMap[teamId];
   const steps = TEAM_STEPS[teamId] ?? [];
   if (!team) return null;
 
@@ -193,6 +195,7 @@ function StepPanel({ teamId, onClose }: { teamId: string; onClose: () => void })
 // ── Main Dashboard ────────────────────────────────────────
 export default function DashboardPage() {
   const { userProfile } = useAuth();
+  const { teams, teamMap } = useSystem();
   const [campaigns, setCampaigns]       = useState<Campaign[]>([]);
   const [allReports, setAllReports]     = useState<ReportEntry[]>([]);
   const [activeCampaignId, setActiveCamp] = useState<string | null>(null);
@@ -229,9 +232,7 @@ export default function DashboardPage() {
   const totalBudget = campaigns.reduce((s, c) => s + (c.budget ?? 0), 0);
   const totalGmv    = campaigns.reduce((s, c) => s + (c.targetGmv ?? 0), 0);
 
-  const TEAM_NODES = [
-    "social", "media", "design", "onsite", "seo", "digital",
-  ] as TeamId[];
+  const TEAM_NODES = teams.filter(t => t.id !== "campaign").map(t => t.id);
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -240,7 +241,7 @@ export default function DashboardPage() {
         <h1 className="text-lg font-black text-slate-800">🏠 Dashboard</h1>
         <p className="text-xs text-slate-400 mt-0.5">
           Xin chào {userProfile?.displayName} ·{" "}
-          {userProfile?.teamId ? TEAM_MAP[userProfile.teamId]?.label : "Chưa chọn team"}
+          {userProfile?.teamId ? teamMap[userProfile.teamId]?.label : "Chưa chọn team"}
         </p>
       </div>
 
@@ -293,7 +294,7 @@ export default function DashboardPage() {
               <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Pha 1</div>
               <FlowNode
                 teamId="campaign" label="Campaign" icon="🏆"
-                color={TEAM_MAP.campaign.color}
+                color={teamMap["campaign"]?.color || "#6366F1"}
                 pct={0}
                 isActive={activeNode === "campaign"}
                 onClick={() => setActiveNode(activeNode === "campaign" ? null : "campaign")}
@@ -311,7 +312,8 @@ export default function DashboardPage() {
               <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Pha 2 — Song song</div>
               <div className="grid grid-cols-3 gap-x-3 gap-y-2">
                 {TEAM_NODES.map(tid => {
-                  const team = TEAM_MAP[tid];
+                  const team = teamMap[tid];
+                  if (!team) return null;
                   const pct  = teamPct(tid);
                   return (
                     <FlowNode

@@ -350,6 +350,46 @@ export async function upsertUserProfile(profile: UserProfile): Promise<void> {
   await setDoc(doc(db, USERS, profile.uid), profile, { merge: true });
 }
 
+// ── Teams & Resources ──────────────────────────────────────
+export function subscribeTeams(cb: (data: Team[]) => void): Unsubscribe {
+  const q = collection(db, COLLECTIONS.teams);
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<Team>(d))));
+}
+
+export async function upsertTeam(data: Omit<Team, "id"> & { id?: string }): Promise<void> {
+  if (data.id) {
+    const { id, ...rest } = data;
+    await setDoc(doc(db, COLLECTIONS.teams, id), { ...rest, id, updatedAt: serverTimestamp() }, { merge: true });
+  } else {
+    // If we want the ID to be the same as doc ID for predictability:
+    const docRef = doc(collection(db, COLLECTIONS.teams));
+    await setDoc(docRef, { ...data, id: docRef.id, updatedAt: serverTimestamp() });
+  }
+}
+
+export async function deleteTeam(id: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTIONS.teams, id));
+}
+
+export function subscribeResources(cb: (data: ResourceConfig[]) => void): Unsubscribe {
+  const q = collection(db, COLLECTIONS.resources);
+  return onSnapshot(q, snap => cb(snap.docs.map(d => fromFirestore<ResourceConfig>(d))));
+}
+
+export async function upsertResource(data: Omit<ResourceConfig, "id"> & { id?: string }): Promise<void> {
+  if (data.id) {
+    const { id, ...rest } = data;
+    await setDoc(doc(db, COLLECTIONS.resources, id), { ...rest, id, updatedAt: serverTimestamp() }, { merge: true });
+  } else {
+    const docRef = doc(collection(db, COLLECTIONS.resources));
+    await setDoc(docRef, { ...data, id: docRef.id, updatedAt: serverTimestamp() });
+  }
+}
+
+export async function deleteResource(id: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTIONS.resources, id));
+}
+
 // ── Period helpers ─────────────────────────────────────────
 export function periodKey(p: Period): string {
   return `${p.type}:${p.value}`;

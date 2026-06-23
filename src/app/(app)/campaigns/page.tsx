@@ -2,13 +2,14 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { subscribeCampaigns, createCampaign, updateCampaign, deleteCampaign, upsertReport, getCampaignKPIs } from "@/lib/firestore";
-import { TEAMS, BRAND, CAMPAIGN_STATUS_CONFIG, TEAM_KPI_FIELDS } from "@/lib/constants";
+import { BRAND, CAMPAIGN_STATUS_CONFIG, TEAM_KPI_FIELDS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { CampaignStatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
+import { useSystem } from "@/hooks/useSystem";
 import type { Campaign, CampaignStatus, TeamId } from "@/types";
 
 const COLORS = ["#EF4444","#8B5CF6","#10B981","#3B82F6","#F59E0B","#EC4899","#06B6D4","#F97316"];
@@ -44,6 +45,7 @@ function CampaignModal({
   onClose: () => void;
   onSave: (data: FormState) => void;
 }) {
+  const { teams } = useSystem();
   const [form, setForm] = useState<FormState>(initial ?? defaultForm());
 
   const toggleTeam = (tid: TeamId) =>
@@ -151,7 +153,7 @@ function CampaignModal({
           <div>
             <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-2">Teams tham gia</label>
             <div className="flex flex-wrap gap-2">
-              {TEAMS.map(t => (
+              {teams.map(t => (
                 <button key={t.id} type="button" onClick={() => toggleTeam(t.id)}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all"
                   style={form.teams.includes(t.id)
@@ -171,7 +173,7 @@ function CampaignModal({
               <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-3">Giao KPI Tổng cho Campaign</label>
               <div className="space-y-4">
                 {form.teams.filter(tid => tid !== "campaign").map(tid => {
-                  const team = TEAMS.find(t => t.id === tid);
+                  const team = teams.find(t => t.id === tid);
                   const fields = TEAM_KPI_FIELDS[tid] || [];
                   if (fields.length === 0) return null;
                   return (

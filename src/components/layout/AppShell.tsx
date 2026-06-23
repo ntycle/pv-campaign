@@ -6,6 +6,8 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TeamSetupModal } from "@/components/layout/TeamSetupModal";
 
 
+import { SystemProvider } from "@/hooks/useSystem";
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -23,12 +25,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
-      <TeamSetupModal />
-      <Sidebar />
-      <main className="flex-1 ml-60 min-h-screen flex flex-col">
-        {children}
-      </main>
-    </div>
+    <SystemProvider>
+      <div className="flex min-h-screen bg-slate-100">
+        <TeamSetupModal />
+        <Sidebar />
+        <main className="flex-1 ml-60 min-h-screen flex flex-col">
+          {children}
+        </main>
+      </div>
+    </SystemProvider>
   );
 }

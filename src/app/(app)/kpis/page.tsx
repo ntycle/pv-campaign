@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { WeekHeader } from "@/components/layout/WeekHeader";
-import { TEAMS, TEAM_KPI_FIELDS, BRAND } from "@/lib/constants";
-import { subscribeCampaigns, subscribeKpis, upsertKpi } from "@/lib/firestore";
+import { TEAM_KPI_FIELDS, BRAND } from "@/lib/constants";
+import { subscribeCampaigns, subscribeKpis, upsertKpi, getCampaignKPIs } from "@/lib/firestore";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { useAuth } from "@/hooks/useAuth";
+import { useSystem } from "@/hooks/useSystem";
 import type { Campaign, KpiEntry, TeamId } from "@/types";
 
 function KpiEditModal({
@@ -57,10 +58,12 @@ function KpiEditModal({
 
 export default function KpisPage() {
   const { user } = useAuth();
+  const { teams } = useSystem();
   const [week, setWeek] = useState(0);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCamp, setSelectedCamp] = useState<string>("");
   const [kpis, setKpis] = useState<KpiEntry[]>([]);
+  const [campaignTargets, setCampaignTargets] = useState<Record<string, Record<string, number>>>({});
   const [editEntry, setEditEntry] = useState<null | { entry: Partial<KpiEntry> & { fieldId: string; campaignId: string; teamId: TeamId; weekIndex: number }; label: string }>(null);
 
   useEffect(() => subscribeCampaigns(d => {
@@ -70,6 +73,7 @@ export default function KpisPage() {
 
   useEffect(() => {
     if (!selectedCamp) return;
+    getCampaignKPIs(selectedCamp).then(setCampaignTargets);
     return subscribeKpis(selectedCamp, week, setKpis);
   }, [selectedCamp, week]);
 
@@ -115,8 +119,8 @@ export default function KpisPage() {
 
         {/* KPI grid per team */}
         <div className="space-y-6">
-          {TEAMS.map(team => {
-            const fields = TEAM_KPI_FIELDS[team.id];
+          {teams.map(team => {
+            const fields = TEAM_KPI_FIELDS[team.id] || [];
             return (
               <div key={team.id} className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
                 <div
@@ -132,11 +136,12 @@ export default function KpisPage() {
                 <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {fields.map(field => {
                     const existing = getKpi(team.id, field.id);
+                    const campaignTarget = campaignTargets[team.id]?.[field.id] ?? existing?.target ?? 0;
                     return (
                       <KpiCard
                         key={field.id}
                         field={field}
-                        target={existing?.target ?? 0}
+                        target={campaignTarget}
                         actual={existing?.actual ?? 0}
                         onEdit={() => setEditEntry({
                           entry: {
@@ -145,7 +150,7 @@ export default function KpisPage() {
                             campaignId: selectedCamp,
                             teamId: team.id,
                             weekIndex: week,
-                            target: existing?.target ?? 0,
+                            target: campaignTarget,
                             actual: existing?.actual ?? 0,
                             note: existing?.note,
                           },

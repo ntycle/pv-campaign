@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
-import { RESOURCE_CONFIG, TEAMS, BRAND } from "@/lib/constants";
+import { BRAND, STATUS_CONFIG } from "@/lib/constants";
 import { subscribeAllBookings, subscribeCampaigns, upsertBooking, deleteBooking } from "@/lib/firestore";
+import { useSystem } from "@/hooks/useSystem";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +16,7 @@ function BookingModal({
   item?: Booking; campaigns: Campaign[]; selectedDate: string;
   user: string; onSave: (d: Omit<Booking,"id">) => void; onClose: () => void;
 }) {
+  const { teams, resources } = useSystem();
   const [form, setForm] = useState<Omit<Booking,"id">>({
     campaignId: campaigns[0]?.id ?? "",
     resourceType: "design_slot",
@@ -49,7 +51,7 @@ function BookingModal({
             <div>
               <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Tài nguyên</label>
               <select className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none" value={form.resourceType} onChange={e => setForm(p=>({...p,resourceType:e.target.value as ResourceType}))}>
-                {Object.entries(RESOURCE_CONFIG).map(([k,v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+                {resources.map(r => <option key={r.id} value={r.id}>{r.icon} {r.label}</option>)}
               </select>
             </div>
             <div>
@@ -69,7 +71,7 @@ function BookingModal({
           <div>
             <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-2">Teams tham gia</label>
             <div className="flex flex-wrap gap-2">
-              {TEAMS.map(t => (
+              {teams.map(t => (
                 <button key={t.id} type="button" onClick={() => toggleTeam(t.id)}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1"
                   style={form.teams.includes(t.id)?{background:t.color,color:"#fff",borderColor:t.color}:{background:"#F9FAFB",color:"#374151",borderColor:"#E5E7EB"}}>
@@ -118,13 +120,12 @@ function BookingModal({
 }
 
 export default function BookingsPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
+  const { teams, resources, resourceMap } = useSystem();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [modal, setModal] = useState<Booking | true | null>(null);
-  const [confirmingBooking, setConfirmingBooking] = useState<Booking | null>(null);
-  const [deliveredDate, setDeliveredDate] = useState("");
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
   useEffect(() => subscribeAllBookings(setBookings), []);
@@ -146,29 +147,10 @@ export default function BookingsPage() {
     }
   };
 
-  const handleConfirm = async () => {
-    if (!confirmingBooking) return;
-    await upsertBooking({
-      ...confirmingBooking,
-      status: "approved",
-      deliveredDate: deliveredDate || format(new Date(), "yyyy-MM-dd"),
-      confirmedAt: new Date().toISOString(),
-      updatedBy: user?.displayName ?? "User",
-    });
-    setConfirmingBooking(null);
-    setDeliveredDate("");
-  };
-
-  // Resource usage (calculate based on currently filtered bookings)
-  const usage = Object.entries(RESOURCE_CONFIG).map(([rType, cfg]) => {
-    const used = filteredBookings.filter(b => b.resourceType === rType).reduce((sum, b) => {
-      // count how many days of this booking fall in the current week
-      const daysInWeek = b.dates.filter(d => d >= weekStartStr && d <= weekEndStr).length;
-      return sum + daysInWeek;
-    }, 0);
-    // Since we now count per day, capacity might mean "per week" capacity, or we should re-think it.
-    // Let's assume capacity is per week.
-    const pct  = Math.round(used / cfg.capacity * 100);
+  const usage = resources.map((cfg) => {
+    const rType = cfg.id;
+    const used = filteredBookings.filter(b => b.resourceType === rType).length;
+    const pct  = Math.round(used / (cfg.capacity || 1) * 100);
     return { rType, ...cfg, used, pct };
   });
 
@@ -177,23 +159,21 @@ export default function BookingsPage() {
       <DateWeekHeader currentDate={currentDate} onChange={setCurrentDate} title="Booking Tài Nguyên" />
 
       <div className="flex-1 p-6 space-y-6">
-        {/* Resource capacity overview */}
         <div className="grid grid-cols-5 gap-4">
           {usage.map(r => {
             const pColor = r.pct >= 100 ? "#EF4444" : r.pct >= 70 ? "#F59E0B" : "#10B981";
-            const team = TEAMS.find(t => t.id === r.teamId)!;
+            const team = teams.find(t => t.id === r.teamId);
             return (
-              <div key={r.rType} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm" style={{ borderTop: `4px solid ${team.color}` }}>
+              <div key={r.rType} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm" style={{ borderTop: `4px solid ${team?.color || "#e2e8f0"}` }}>
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-2xl">{r.icon}</span>
                   <span className="text-2xl font-black" style={{ color: pColor }}>{r.pct}%</span>
                 </div>
                 <div className="font-black text-xs text-slate-700 mb-2">{r.label}</div>
-                <TeamBadge teamId={r.teamId} />
+                {team && <TeamBadge teamId={team.id} />}
                 <div className="mt-2 text-[10px]">
                   <span className="text-red-500 font-bold">{r.used}</span>
                   <span className="text-slate-400">/{r.capacity} slot (tuần)</span>
-                  <span className="text-emerald-500 ml-2">Còn {Math.max(0, r.capacity - r.used)}</span>
                 </div>
                 <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                   <div className="h-full rounded-full" style={{ width: Math.min(r.pct, 100) + "%", background: pColor }} />
@@ -203,7 +183,6 @@ export default function BookingsPage() {
           })}
         </div>
 
-        {/* Booking list */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-black text-slate-700 uppercase tracking-wide">📋 Danh sách Booking Tuần Này</h2>
@@ -215,23 +194,23 @@ export default function BookingsPage() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr style={{ background: BRAND.navy }}>
-                  {["Campaign","Tài nguyên","Teams","Ngày book","Ngày giao","Mô tả","Trạng thái",""].map((h,i) => (
+                  {["Campaign","Tài nguyên","Teams","Ngày book","Hoàn thành","Mô tả","Trạng thái",""].map((h,i) => (
                     <th key={i} className="px-4 py-2.5 text-left text-xs font-bold text-white">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredBookings.length === 0 ? (
-                  <tr><td colSpan={7} className="py-10 text-center text-slate-300 text-sm">Chưa có booking nào trong tuần này.</td></tr>
+                  <tr><td colSpan={8} className="py-10 text-center text-slate-300 text-sm">Chưa có booking nào trong tuần này.</td></tr>
                 ) : filteredBookings.map((b, i) => {
                   const cp = campMap[b.campaignId];
-                  const rt = RESOURCE_CONFIG[b.resourceType];
+                  const rt = resourceMap[b.resourceType];
                   return (
                     <tr key={b.id} className={i%2===0?"bg-white":"bg-slate-50"}>
                       <td className="px-4 py-2.5">
                         {cp && <span className="text-xs font-bold px-2 py-0.5 rounded-full border" style={{ color: cp.color, background: cp.color+"18", borderColor: cp.color+"40" }}>{cp.name}</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-xs font-semibold">{rt?.icon} {rt?.label}</td>
+                      <td className="px-4 py-2.5 text-xs font-semibold flex items-center gap-2">{rt?.icon} {rt?.label}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex gap-1 flex-wrap">
                           {b.teams.map(tid => <TeamBadge key={tid} teamId={tid} />)}
@@ -239,38 +218,48 @@ export default function BookingsPage() {
                       </td>
                       <td className="px-4 py-2.5 text-xs font-bold text-slate-600">
                         {b.dates.length > 1 ? (
-                          <span className={b.dates.some(d => d >= weekStartStr && d <= weekEndStr) ? "text-blue-600" : ""}>
-                            {format(new Date(b.dates[0]), "dd/MM")} - {format(new Date(b.dates[b.dates.length - 1]), "dd/MM")}
-                          </span>
+                          <span>{format(new Date(b.dates[0]), "dd/MM")} - {format(new Date(b.dates[b.dates.length - 1]), "dd/MM")}</span>
                         ) : (
-                          <span className={b.dates[0] >= weekStartStr && b.dates[0] <= weekEndStr ? "text-blue-600" : ""}>
-                            {format(new Date(b.dates[0]), "dd/MM")}
-                          </span>
+                          <span>{format(new Date(b.dates[0]), "dd/MM")}</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-xs font-bold">
-                        {b.deliveredDate ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-emerald-600">{format(new Date(b.deliveredDate), "dd/MM/yyyy")}</span>
-                            <span className="text-[10px] text-slate-400">Đã giao</span>
-                          </div>
-                        ) : b.status === "approved" ? (
-                          <span className="text-slate-400 text-[10px]">—</span>
+                        {b.status === "done" && b.completedDate ? (
+                          <span className="text-emerald-600">{format(new Date(b.completedDate), "dd/MM/yyyy")}</span>
                         ) : (
-                          <span className="text-[10px] text-slate-300 italic">Chờ xác nhận</span>
+                          <span className="text-slate-400">—</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-xs text-slate-400 max-w-36 truncate">{b.description || "—"}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2">
-                          <StatusBadge status={b.status} />
-                          {b.status === "pending" && (
-                            <button
-                              onClick={() => { setConfirmingBooking(b); setDeliveredDate(format(new Date(), "yyyy-MM-dd")); }}
-                              className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 font-bold rounded border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                          {(userProfile?.teamId === "campaign" || userProfile?.teamId === rt?.teamId) ? (
+                            <select
+                              className="text-[11px] px-2 py-1 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold appearance-none cursor-pointer"
+                              style={{ 
+                                backgroundColor: STATUS_CONFIG[b.status]?.bg || "#F3F4F6", 
+                                color: STATUS_CONFIG[b.status]?.color || "#6B7280",
+                                borderColor: (STATUS_CONFIG[b.status]?.color || "#6B7280") + "40"
+                              }}
+                              value={b.status}
+                              onChange={(e) => {
+                                const newStatus = e.target.value as ContentStatus;
+                                const payload: Partial<Booking> = { status: newStatus, updatedBy: user?.displayName ?? "User" };
+                                if (newStatus === "done") {
+                                  payload.completedDate = format(new Date(), "yyyy-MM-dd");
+                                } else {
+                                  payload.completedDate = "";
+                                }
+                                upsertBooking({ ...b, ...payload });
+                              }}
                             >
-                              Xác nhận
-                            </button>
+                              <option value="pending">Chờ duyệt</option>
+                              <option value="approved">Đã duyệt</option>
+                              <option value="running">Đang chạy</option>
+                              <option value="done">Hoàn thành</option>
+                            </select>
+                          ) : (
+                            <StatusBadge status={b.status} />
                           )}
                         </div>
                       </td>
@@ -300,53 +289,6 @@ export default function BookingsPage() {
         />
       )}
 
-      {/* Confirm modal */}
-      {confirmingBooking && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <span className="font-black text-slate-800 text-sm">✅ Xác nhận giao tài nguyên</span>
-              <button onClick={() => setConfirmingBooking(null)} className="text-slate-400 hover:text-slate-700">✕</button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                <div className="font-bold text-slate-700 mb-1">
-                  {RESOURCE_CONFIG[confirmingBooking.resourceType]?.icon} {RESOURCE_CONFIG[confirmingBooking.resourceType]?.label}
-                </div>
-                <div className="text-slate-500">
-                  Ngày book: {confirmingBooking.dates.length > 1
-                    ? `${format(new Date(confirmingBooking.dates[0]), "dd/MM")} - ${format(new Date(confirmingBooking.dates[confirmingBooking.dates.length-1]), "dd/MM")}`
-                    : format(new Date(confirmingBooking.dates[0]), "dd/MM/yyyy")}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1.5">📅 Ngày giao thực tế</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                  value={deliveredDate}
-                  onChange={e => setDeliveredDate(e.target.value)}
-                />
-                <p className="text-[11px] text-slate-400 mt-1">Ngày tài nguyên thực tế được bàn giao hoặc bắt đầu sử dụng.</p>
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => { setConfirmingBooking(null); setDeliveredDate(""); }}
-                  className="flex-1 px-4 py-2 text-xs font-bold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
-                >
-                  Huỷ
-                </button>
-                <button
-                  onClick={handleConfirm}
-                  className="flex-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-emerald-600 hover:bg-emerald-700"
-                >
-                  Xác nhận giao
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

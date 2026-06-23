@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
-import { RESOURCE_CONFIG, TEAMS, CONTENT_QUOTAS, BRAND } from "@/lib/constants";
+import { CONTENT_QUOTAS, BRAND } from "@/lib/constants";
 import { subscribeAllContentItems, subscribeAllBookings, subscribeCampaigns } from "@/lib/firestore";
+import { useSystem } from "@/hooks/useSystem";
 import type { ContentItem, Booking, Campaign } from "@/types";
 
 interface Conflict {
@@ -25,7 +26,9 @@ function detectConflicts(
   campaigns: Campaign[], 
   weekStartStr: string, 
   weekEndStr: string,
-  weekDays: Date[]
+  weekDays: Date[],
+  teams: Team[],
+  resources: ResourceConfig[]
 ): Conflict[] {
   const conflicts: Conflict[] = [];
 
@@ -34,7 +37,8 @@ function detectConflicts(
   const weekBookings = bookings.filter(b => b.dates.some(d => d >= weekStartStr && d <= weekEndStr));
 
   // 1. Resource overload (check day by day)
-  Object.entries(RESOURCE_CONFIG).forEach(([rType, cfg]) => {
+  resources.forEach((cfg) => {
+    const rType = cfg.id;
     weekDays.forEach((day) => {
       const dateStr = format(day, "yyyy-MM-dd");
       const n = weekBookings.filter(b => b.resourceType === rType && b.dates.includes(dateStr)).length;
@@ -50,7 +54,7 @@ function detectConflicts(
   });
 
   // 2. Team overload
-  TEAMS.forEach(t => {
+  teams.forEach(t => {
     const n = weekContents.filter(c => c.teamId === t.id).length;
     if (n > 15) {
       conflicts.push({
@@ -90,6 +94,7 @@ function detectConflicts(
 }
 
 export default function ConflictsPage() {
+  const { teams, resources } = useSystem();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [content, setContent] = useState<ContentItem[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -106,7 +111,7 @@ export default function ConflictsPage() {
   const weekStartStr = format(weekStart, "yyyy-MM-dd");
   const weekEndStr = format(weekEnd, "yyyy-MM-dd");
 
-  const conflicts = detectConflicts(content, bookings, campaigns, weekStartStr, weekEndStr, weekDays);
+  const conflicts = detectConflicts(content, bookings, campaigns, weekStartStr, weekEndStr, weekDays, teams, resources);
   const highCount   = conflicts.filter(c => c.sev === "high").length;
   const medCount    = conflicts.filter(c => c.sev === "medium").length;
 

@@ -3,11 +3,12 @@ import { useState, useEffect } from "react";
 import { startOfWeek, endOfWeek, eachDayOfInterval, format, addWeeks, addDays } from "date-fns";
 import { vi } from "date-fns/locale";
 import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
-import { CONTENT_QUOTAS, TEAMS, BRAND, DAYS_FULL, RESOURCE_CONFIG } from "@/lib/constants";
+import { CONTENT_QUOTAS, BRAND, DAYS_FULL } from "@/lib/constants";
 import { subscribeAllContentItems, subscribeAllBookings, subscribeCampaigns, upsertContentItem, deleteContentItem } from "@/lib/firestore";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
+import { useSystem } from "@/hooks/useSystem";
 import type { ContentItem, ContentType, ContentStatus, TeamId, Campaign, Booking } from "@/types";
 
 function ContentModal({
@@ -17,6 +18,7 @@ function ContentModal({
   item?: ContentItem; campaigns: Campaign[]; selectedDate: string; user: string;
   onSave: (d: Omit<ContentItem,"id">) => void; onClose: () => void;
 }) {
+  const { teams } = useSystem();
   const [form, setForm] = useState<Omit<ContentItem,"id">>({
     campaignId: "", teamId: "social", type: "post", title: "",
     date: selectedDate, status: "pending", note: "",
@@ -42,7 +44,7 @@ function ContentModal({
             <div>
               <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Team</label>
               <select className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none" value={form.teamId} onChange={e => setForm(p => ({...p, teamId: e.target.value as TeamId}))}>
-                {TEAMS.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+                {teams.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
               </select>
             </div>
             <div>
@@ -97,6 +99,7 @@ function ContentModal({
 
 export default function CalendarPage() {
   const { user } = useAuth();
+  const { teams, teamMap, resourceMap } = useSystem();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [content, setContent] = useState<ContentItem[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -156,8 +159,8 @@ export default function CalendarPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black text-slate-400 w-12">Team:</span>
-          {[{id:"all",label:"Tất cả",icon:"👥",color:"#6B7280"},...TEAMS].map(t => (
-            <button key={t.id} onClick={() => setFilterTeam(t.id)}
+          {[{id:"all",label:"Tất cả",icon:"👥",color:"#6B7280"},...teams].map(t => (
+            <button key={t.id} onClick={() => setFilterTeam(t.id as TeamId | "all")}
               className="text-xs font-bold px-3 py-1 rounded-full border transition-all"
               style={filterTeam===t.id?{background:BRAND.navy,color:"#fff",borderColor:BRAND.navy}:{borderColor:"#E5E7EB",color:"#4B5563"}}
             >{t.icon} {t.label}</button>
@@ -196,7 +199,8 @@ export default function CalendarPage() {
                     const orphanBookings = dayBookings.filter(b => !b.campaignId);
 
                     const renderBooking = (b: Booking, indent: boolean) => {
-                      const rc = RESOURCE_CONFIG[b.resourceType];
+                      const rc = resourceMap[b.resourceType];
+                      if (!rc) return null;
                       return (
                         <div key={`booking-${b.id}`} className={`bg-orange-50 rounded p-1.5 border-l-2 flex flex-col gap-1 ${indent ? "ml-2" : ""}`} style={{ borderColor: "#F97316" }}>
                           <div className="flex justify-between items-start">
@@ -213,7 +217,7 @@ export default function CalendarPage() {
 
                     const renderItem = (item: ContentItem, indent: boolean) => {
                       const ct = CONTENT_QUOTAS[item.type];
-                      const team = TEAMS.find(t => t.id === item.teamId);
+                      const team = teamMap[item.teamId];
                       return (
                         <div key={item.id} onClick={() => setModal(item)}
                           className={`bg-slate-50 rounded p-1.5 cursor-pointer hover:bg-slate-100 transition-colors border-l-2 flex flex-col gap-1 ${indent ? "ml-2" : ""}`}

@@ -1,17 +1,8 @@
 // ── Teams ──────────────────────────────────────────────────
-export type TeamId =
-  | "campaign"
-  | "social"
-  | "retail"
-  | "media"
-  | "seo"
-  | "digital"
-  | "onsite"
-  | "design"
-  | "trade";
+export type TeamId = string;
 
 export interface Team {
-  id: TeamId;
+  id: string;
   label: string;
   sublabel: string;
   color: string;
@@ -121,8 +112,16 @@ export interface ContentItem {
 }
 
 // ── Resource Booking ────────────────────────────────────────
-export type ResourceType = "design_slot" | "video_prod" | "ads_budget" | "email_slot" | "event_slot";
+export type ResourceType = string;
 export type Priority = "critical" | "high" | "medium" | "low";
+
+export interface ResourceConfig {
+  id: string; // ResourceType
+  label: string;
+  icon: string;
+  capacity: number; // Default capacity
+  teamId: string;   // Which team manages this
+}
 
 export interface Booking {
   id: string;
@@ -133,7 +132,7 @@ export interface Booking {
   status: ContentStatus;
   priority: Priority;
   description?: string;
-  deliveredDate?: string; // YYYY-MM-DD - actual handover/delivery date
+  completedDate?: string; // YYYY-MM-DD - actual completed date
   confirmedAt?: string;   // ISO timestamp when confirmed
   updatedBy?: string;
   updatedAt?: string;
