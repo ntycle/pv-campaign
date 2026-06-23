@@ -5,7 +5,7 @@ import { DateWeekHeader } from "@/components/layout/DateWeekHeader";
 import { CONTENT_QUOTAS, BRAND } from "@/lib/constants";
 import { subscribeAllContentItems, subscribeAllBookings, subscribeCampaigns } from "@/lib/firestore";
 import { useSystem } from "@/hooks/useSystem";
-import type { ContentItem, Booking, Campaign } from "@/types";
+import type { ContentItem, Booking, Campaign, Team, ResourceConfig } from "@/types";
 
 interface Conflict {
   sev: "high" | "medium" | "low";

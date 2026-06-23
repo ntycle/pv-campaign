@@ -9,7 +9,7 @@ import {
 import { db, COLLECTIONS, auth } from "./firebase";
 import type {
   Campaign, ContentItem, Booking, KpiEntry, TeamId,
-  ReportEntry, TeamPlan, UserProfile, Period, ResourceQuota, ActivityLog
+  ReportEntry, TeamPlan, UserProfile, Period, ResourceQuota, ActivityLog, Team, ResourceConfig
 } from "@/types";
 
 // ── RESOURCE QUOTAS ────────────────────────────────────────
