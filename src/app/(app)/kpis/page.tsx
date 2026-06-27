@@ -79,20 +79,24 @@ function CampaignTargetRow({
   return (
     <div className="flex flex-col gap-1.5 p-3 bg-white border border-slate-200 rounded-xl">
       <label className="text-xs font-bold text-slate-700">{field.label}</label>
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <input 
           type="number" 
-          className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none"
+          className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none"
           value={val}
           onChange={e => setVal(+e.target.value)}
         />
-        <button 
-          onClick={handleSave}
-          disabled={saving || val === currentTarget}
-          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
-        >
-          {saving ? "..." : "Lưu"}
-        </button>
+        {(val !== currentTarget || saving) && (
+          <div className="flex justify-end animate-in fade-in slide-in-from-top-1">
+            <button 
+              onClick={handleSave}
+              disabled={saving || val === currentTarget}
+              className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50 shadow-sm"
+            >
+              {saving ? "Đang lưu..." : "Lưu"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
