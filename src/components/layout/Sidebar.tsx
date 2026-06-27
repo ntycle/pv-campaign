@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { BRAND } from "@/lib/constants";
+import { BRAND, TEAM_MAP } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 export const NAV = [
@@ -91,6 +91,11 @@ export function Sidebar() {
             <div className="flex-1 min-w-0">
               <div className="text-white text-xs font-semibold truncate">{user.displayName}</div>
               <div className="text-slate-400 text-xs truncate">{user.email}</div>
+              {userProfile?.teamId && (
+                <div className="text-slate-500 text-[10px] font-medium mt-0.5 truncate">
+                  Team: {TEAM_MAP[userProfile.teamId]?.label || userProfile.teamId}
+                </div>
+              )}
             </div>
             <button
               onClick={signOut}

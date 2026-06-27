@@ -135,6 +135,7 @@ export default function BookingsPage() {
   const { user, userProfile } = useAuth();
   const { teams, resources, resourceMap } = useSystem();
   const [currentDate, setCurrentDate] = useState(new Date());
+  useEffect(() => setCurrentDate(new Date()), []);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [modal, setModal] = useState<Booking | true | null>(null);

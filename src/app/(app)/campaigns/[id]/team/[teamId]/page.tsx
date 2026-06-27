@@ -168,7 +168,7 @@ function KpiTab({ teamId, campaignId, reports, canEdit, userName }: { teamId: Te
 // ── Nội dung Tab ──────────────────────────────────────────
 function ContentTab({ teamId, campaign, contents, canEdit, userName }: { teamId: TeamId; campaign: Campaign; contents: ContentItem[]; canEdit: boolean; userName: string; }) {
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState(campaign.startDate || format(new Date(), "yyyy-MM-dd"));
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [type, setType] = useState<ContentType>("post");
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -176,6 +176,7 @@ function ContentTab({ teamId, campaign, contents, canEdit, userName }: { teamId:
   const [viewWeekOffset, setViewWeekOffset] = useState(0);
 
   useEffect(() => {
+    setDate(format(new Date(), "yyyy-MM-dd"));
     setViewWeekOffset(0);
   }, [campaign.id]);
 

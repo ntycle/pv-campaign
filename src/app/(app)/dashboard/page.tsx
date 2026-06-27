@@ -16,7 +16,7 @@ import type { Campaign, ReportEntry, ContentItem, Booking } from "@/types";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { ActivityFeed } from "@/components/ui/ActivityFeed";
 import { isWithinInterval, startOfWeek, endOfWeek, parseISO } from "date-fns";
-import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, LabelList } from "recharts";
 export default function DashboardPage() {
   const { teamMap } = useSystem();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -180,6 +180,7 @@ export default function DashboardPage() {
                   unit: fieldDef?.unit ?? '',
                   TargetRaw: t,
                   ActualRaw: a,
+                  TargetPct: 100,
                   "Hoàn thành (%)": Math.min(100, Math.round(rawPct)),
                   pctDisplay: Math.round(rawPct)
                 };
@@ -234,9 +235,10 @@ export default function DashboardPage() {
                     {chartData.length > 0 ? (
                       <div className="h-40 w-full mt-2 min-w-[1px] min-h-[160px]">
                         <ResponsiveContainer width="99%" height={150}>
-                          <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <BarChart data={chartData} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                            <XAxis xAxisId={0} dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                            <XAxis xAxisId={1} dataKey="name" hide />
                             <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} domain={[0, 100]} />
                             <Tooltip 
                               cursor={{ fill: '#F8FAFC' }}
@@ -255,7 +257,10 @@ export default function DashboardPage() {
                                 return null;
                               }}
                             />
-                            <Bar dataKey="Hoàn thành (%)" fill={team.color || "#3B82F6"} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                            <Bar xAxisId={0} dataKey="TargetPct" fill="#E2E8F0" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                            <Bar xAxisId={1} dataKey="Hoàn thành (%)" fill={team.color || "#3B82F6"} radius={[4, 4, 0, 0]} maxBarSize={30}>
+                              <LabelList dataKey="pctDisplay" position="top" formatter={(value: any) => `${value}%`} fill="#64748B" fontSize={10} fontWeight="bold" />
+                            </Bar>
                           </BarChart>
                         </ResponsiveContainer>
                       </div>

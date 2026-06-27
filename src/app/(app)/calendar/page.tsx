@@ -101,6 +101,7 @@ export default function CalendarPage() {
   const { user } = useAuth();
   const { teams, teamMap, resourceMap } = useSystem();
   const [currentDate, setCurrentDate] = useState(new Date());
+  useEffect(() => setCurrentDate(new Date()), []);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);

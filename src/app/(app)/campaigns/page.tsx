@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { subscribeCampaigns, createCampaign, updateCampaign, deleteCampaign, upsertReport, getCampaignKPIs } from "@/lib/firestore";
 import { BRAND, CAMPAIGN_STATUS_CONFIG, TEAM_KPI_FIELDS } from "@/lib/constants";
@@ -116,10 +116,13 @@ function CampaignModal({
             </div>
             <div>
               <label className="text-xs font-black text-slate-500 uppercase tracking-wide block mb-1">Ngày kết thúc</label>
-              <input type="date" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none"
+              <input type="date" className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none ${form.endDate < form.startDate ? 'border-red-500 focus:border-red-500' : 'border-slate-200'}`}
                 value={form.endDate} onChange={e => setForm(p => ({...p, endDate: e.target.value}))} />
             </div>
           </div>
+          {form.endDate < form.startDate && (
+            <div className="text-xs font-bold text-red-500 mt-1">⚠️ Ngày kết thúc không thể nhỏ hơn ngày bắt đầu.</div>
+          )}
 
           {/* Budget + GMV */}
           <div className="grid grid-cols-2 gap-3">
@@ -218,8 +221,9 @@ function CampaignModal({
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white">
           <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">Hủy</button>
           <button
-            onClick={() => { if (form.name.trim()) { onSave(form); onClose(); } }}
-            className="px-5 py-2 text-sm font-black text-white rounded-lg transition-opacity hover:opacity-90"
+            disabled={form.endDate < form.startDate}
+            onClick={() => { if (form.name.trim() && form.endDate >= form.startDate) { onSave(form); onClose(); } }}
+            className="px-5 py-2 text-sm font-black text-white rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: BRAND.navy }}
           >
             {isEdit ? "💾 Lưu thay đổi" : "Tạo Campaign"}
@@ -265,7 +269,7 @@ function DeleteDialog({
 
 // ── Main Page ─────────────────────────────────────────────────
 export default function CampaignsPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 
   // Modal state
@@ -279,6 +283,14 @@ export default function CampaignsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Campaign | null>(null);
 
   useEffect(() => subscribeCampaigns(setCampaigns), []);
+
+  const filteredCampaigns = useMemo(() => {
+    return campaigns.filter(cp => {
+      if (userProfile?.role === "campaign_lead") return true;
+      if (!userProfile?.teamId) return true;
+      return cp.teams.includes(userProfile.teamId);
+    });
+  }, [campaigns, userProfile]);
 
   // ── Handlers ──
   const handleCreate = async (data: FormState) => {
@@ -370,7 +382,7 @@ export default function CampaignsPage() {
 
       {/* List */}
       <div className="flex-1 p-6">
-        {campaigns.length === 0 ? (
+        {filteredCampaigns.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-slate-400">
             <div className="text-4xl mb-3">🏆</div>
             <div className="text-sm font-semibold">Chưa có campaign nào</div>
@@ -380,7 +392,7 @@ export default function CampaignsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
-            {campaigns.map(cp => (
+            {filteredCampaigns.map(cp => (
               <div
                 key={cp.id}
                 className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow p-5"

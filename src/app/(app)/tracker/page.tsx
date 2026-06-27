@@ -12,6 +12,10 @@ import type { ContentItem, ContentStatus, Campaign } from "@/types";
 
 export default function TrackerPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  
+  useEffect(() => {
+    setCurrentDate(new Date());
+  }, []);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [editId, setEditId] = useState<string | null>(null);

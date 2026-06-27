@@ -96,6 +96,7 @@ function detectConflicts(
 export default function ConflictsPage() {
   const { teams, resources } = useSystem();
   const [currentDate, setCurrentDate] = useState(new Date());
+  useEffect(() => setCurrentDate(new Date()), []);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
